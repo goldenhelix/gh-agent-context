@@ -1,0 +1,3561 @@
+openapi: '3.0.2'
+info:
+  title: Catalog API
+  version: '1.0.0'
+  description: 'Provides endpoints for managing workspace catalogs, including user access, schema definitions, record state, versioning, approvals, publishing, archiving, and data operations.'
+
+externalDocs:
+  url: '/docs/api-docs'
+  description: API Documentation
+
+servers:
+  - url: '/w/my_workspace/api/catalogs'
+
+
+
+
+paths:
+  /template/:
+    get:
+      operationId: "catalogTemplate"
+      summary: "Get a system catalog schema template as text"
+      description: "Return one built-in catalog schema template (its field definitions) as a YAML or JSON string. Use it to inspect a template before creating a catalog from it with catalogCreateFromSystemTemplate. The id is a template id from catalogSystemTemplateList."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "id"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "GeneLists"
+            description: "Template id as returned by catalogSystemTemplateList."
+          description: "Template id as returned by catalogSystemTemplateList."
+          example: "GeneLists"
+
+        - name: "format"
+          in: "query"
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogSchemaFormat"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /systemTemplateList/:
+    get:
+      operationId: "catalogSystemTemplateList"
+      summary: "List available built-in catalog schema templates"
+      description: "List the built-in catalog schema templates (id, name, group) a new catalog can be created from. Pair with catalogTemplate to view a template's fields and catalogCreateFromSystemTemplate to instantiate one."
+      x-agent-permission: "catalog:read"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/CatalogTemplate"
+                  type: "object"
+  /about/:
+    get:
+      operationId: "catalogApiAbout"
+      summary: "Get catalog API version and capabilities"
+      description: "Return the catalog API version and feature flags (e.g. whether approval workflows are supported). A cheap capability probe."
+      x-agent-permission: "catalog:read"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogApiInfo"
+                type: "object"
+  /source/{catalogId}/requiredApprovalCount:
+    get:
+      operationId: "catalogApprovalCount"
+      summary: "Get how many approvals a record needs before publishing"
+      description: "Return how many approvals a record in this catalog requires before it can be published (0 means approvals are not required). Read-only; the setter is a separate manage-only operation."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "number"
+                format: "int32"
+    put:
+      operationId: "setCatalogApprovalCount"
+      summary: "Set how many approvals are required before publishing a record"
+      description: "Administrative setting that changes the catalog's approval policy. Mutates catalog configuration."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "count"
+              properties:
+                count:
+                  type: "number"
+                  format: "int32"
+                  example: 2
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "number"
+                format: "int32"
+  /source/{catalogId}/users:
+    get:
+      operationId: "catalogUsersList"
+      summary: "List users recorded in the catalog"
+      description: "Return the user identities recorded in this catalog (record authors and assignees) as id/name pairs. Read-only."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/CatalogUser"
+                  type: "object"
+  /source/{catalogId}/remapUser/{userId}:
+    put:
+      operationId: "catalogRemapUser"
+      summary: "Reassign one catalog user's records to a different user"
+      description: "Administrative fixup that rewrites the author/assignee identity on records from one user to another (e.g. after an account change). Mutates records."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "userId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "newUser"
+              properties:
+                newUser:
+                  $ref: "#/components/schemas/CatalogUser"
+                  type: "object"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogUser"
+                type: "object"
+  /source/{catalogId}:
+    delete:
+      operationId: "catalogDelete"
+      summary: "Permanently delete an entire catalog"
+      description: "Destructive. Removes the catalog and all of its records from the workspace. Not reversible."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+    get:
+      operationId: "catalogQuery"
+      summary: "Query catalog records with filters, sorting, and paging"
+      description: "Read records from a catalog, optionally filtered by a genomicQuery and/or a filterTree expression, sorted, paged, and projected to chosen fields. This returns actual row data, so it is the expensive path. To answer how many records match, use catalogInfo (recordCount) or catalogAggregate, and to list a field's values use catalogIndexValues. Restrict fieldsBySymbol and limit to keep responses small; page with offset, or with enableCursor plus catalogReadContinue."
+      x-agent-expose: "promoted"
+      x-agent-cost: "expensive"
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "genomicQuery"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenomicQuery"
+
+        - name: "filterTree"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpressionNode"
+          description: "Optional filter, as an ExpressionNode object. A predicate is {op, field, value} where op is a word from OperatorType (Equals, NotEquals, Substring, StartsWith, EndsWith, LessThan, GreaterThan, IsNull, \u2026 \u2014 never a symbol like ==) and field is a field symbol from catalogSchema; combine predicates with {op: And|Or|Not, children: [ \u2026 ]}. Example: {\"op\": \"Equals\", \"field\": \"Sample\", \"value\": \"Imported Variants\"}."
+
+        - name: "orderby"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              $ref: "#/components/schemas/FieldSort"
+              type: "object"
+
+        - name: "limit"
+          in: "query"
+          required: true
+          schema:
+            type: "number"
+            format: "int32"
+            example: 50
+          example: 50
+
+        - name: "offset"
+          in: "query"
+          required: false
+          schema:
+            type: "number"
+            format: "int32"
+
+        - name: "fields"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "number"
+              format: "int32"
+            description: "Field indices (fId from catalogSchema) to return; usually prefer fieldsBySymbol."
+          description: "Field indices (fId from catalogSchema) to return; usually prefer fieldsBySymbol."
+
+        - name: "fieldsBySymbol"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "string"
+            example: "['Chr', 'Start', 'Stop', 'RefAlt', 'Classification']"
+            description: "Which fields to return, as exact field symbols from catalogSchema (the 'symbol' values, e.g. 'Chr', 'RefAlt' \u2014 read catalogSchema first, do not guess). Omit to return all fields."
+          description: "Which fields to return, as exact field symbols from catalogSchema (the 'symbol' values, e.g. 'Chr', 'RefAlt' \u2014 read catalogSchema first, do not guess). Omit to return all fields."
+
+        - name: "format"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              $ref: "#/components/schemas/FormatOption"
+              type: "object"
+            description: "What the response's data object contains \u2014 request the shapes you want (default is only counts, empty data). Include 'objects' to get the records as data.objects (one object per record keyed by field symbol); or 'values' + 'fieldNames' for row arrays; 'recordIds' for the ids. To read rows, you almost always want ['objects']."
+          description: "What the response's data object contains \u2014 request the shapes you want (default is only counts, empty data). Include 'objects' to get the records as data.objects (one object per record keyed by field symbol); or 'values' + 'fieldNames' for row arrays; 'recordIds' for the ids. To read rows, you almost always want ['objects']."
+
+        - name: "queryMode"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogQueryMode"
+
+        - name: "enableCursor"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "If true, enables cursor-based pagination and generates a cursor in the response when hasMore is true."
+          description: "If true, enables cursor-based pagination and generates a cursor in the response when hasMore is true."
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryResponse"
+                type: "object"
+    post:
+      operationId: "catalogWriteRecords"
+      summary: "Write (bulk) many records to a catalog"
+      description: "Bulk-insert or update many records in one call. Requires publish permission and mutates catalog data; for a single record use catalogWriteRecord."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:publish"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                errorMode:
+                  $ref: "#/components/schemas/ErrorMode"
+                  type: "object"
+                values:
+                  type: "array"
+                  items:
+                    type: "array"
+                    items:
+                      type: "object"
+                objects:
+                  type: "array"
+                  items:
+                    type: "object"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/WriteRecordResult"
+                  type: "object"
+  /source/{catalogId}/catalogDuplicate:
+    post:
+      operationId: "catalogDuplicate"
+      summary: "Create a duplicate copy of a catalog"
+      description: "Create a new catalog that copies this catalog's schema and records under a new id. Administrative operation that creates a new catalog."
+      x-agent-expose: "progressive"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "newId"
+                - "newName"
+              properties:
+                newId:
+                  type: "string"
+                  example: "GeneLists_GRCh_38_copy"
+                newName:
+                  type: "string"
+                  example: "Gene Lists (copy)"
+                newNote:
+                  type: "string"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/backup:
+    post:
+      operationId: "catalogBackup"
+      summary: "Back up a catalog to a file in the workspace"
+      description:
+        - "Produces a consistent, self-contained .catalog snapshot even"
+        - "while the source catalog has concurrent readers and writers."
+        - "Returns a process ID that can be polled on"
+        - "/api/catalogs/ps/{processId} for progress."
+      x-agent-expose: "progressive"
+      x-agent-permission: "catalog:manage"
+      x-agent-returns-process: true
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "destinationPath"
+              properties:
+                destinationPath:
+                  type: "string"
+                  example: "Documents/PGx-2026-04-15.catalog"
+                  description: "Workspace-relative path for the backup file (e.g. Documents/PGx-2026-04-15.catalog)"
+                overwrite:
+                  type: "boolean"
+                  description: "Allow overwriting an existing destination file"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/restore:
+    post:
+      operationId: "catalogRestore"
+      summary: "Replace a catalog's contents with a backup file from the workspace"
+      description:
+        - "Closes the live catalog, swaps its file with the provided source,"
+        - "and reopens it. The source file must be a valid catalog (typically"
+        - "the output of catalogBackup). Other API requests targeting this"
+        - "catalog during the brief replace window return \"catalog not found\"."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "sourcePath"
+              properties:
+                sourcePath:
+                  type: "string"
+                  example: "Documents/PGx-2026-04-15.catalog"
+                  description: "Workspace-relative path to the source .catalog file"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/createFromTemplate:
+    post:
+      operationId: "catalogCreateFromTemplate"
+      summary: "Create a new catalog from an uploaded template file"
+      description: "Create a new catalog at the given id from an uploaded schema template file. Administrative operation that creates a new catalog."
+      x-agent-expose: "progressive"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/octet-stream: {}
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogInfo"
+                type: "object"
+  /source/{catalogId}/createFromSystemTemplate:
+    post:
+      operationId: "catalogCreateFromSystemTemplate"
+      summary: "Create a new catalog from a built-in system template"
+      description: "Create a new catalog at the given id from a built-in template (see catalogSystemTemplateList for available templateIds). Administrative operation that creates a new catalog."
+      x-agent-expose: "progressive"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "templateId"
+              properties:
+                templateId:
+                  type: "string"
+                  example: "GeneLists"
+                name:
+                  type: "string"
+                description:
+                  type: "string"
+                group:
+                  type: "string"
+                assembly:
+                  type: "string"
+                  example: "GRCh_38,Chromosome,Homo sapiens"
+                approvalCount:
+                  type: "number"
+                  format: "int32"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogInfo"
+                type: "object"
+  /source/{catalogId}/createFromShippedFile:
+    post:
+      operationId: "catalogCreateFromShippedFile"
+      summary: "Create a new catalog by copying a shipped .catalog file"
+      description:
+        - "Locates a shipped catalog file (e.g. GenePreferences.catalog) in the"
+        - "apiserver's Data directory, copies it into the workspace's catalogs"
+        - "path under the given catalogId, and registers it with the catalog"
+        - "service in-process so it is immediately usable. Returns 409 if a"
+        - "catalog with that id already exists in the workspace."
+      x-agent-expose: "progressive"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "sourceFile"
+              properties:
+                sourceFile:
+                  type: "string"
+                  example: "GenePreferences.catalog"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogInfo"
+                type: "object"
+  /source/{catalogId}/catalogCreate:
+    post:
+      operationId: "catalogCreate"
+      summary: "Create a new catalog with a custom schema"
+      description: "Create a new catalog. The catalogId path param is the catalog's file identifier \u2014 derive it from the name by removing spaces and special characters into a filename-friendly identifier (e.g. name 'ACMG Variants' -> catalogId 'ACMG_Variants'); do not invent unrelated ids or casing. Catalogs have a feature type that fixes their required KEY fields, so pick the right type \u2014 the simplest and most reliable way is to set addFeatureFields to the type and let the server add the correct key fields: Variant (adds a 'Ref/Alt' string key alongside Chr/Start/Stop), CNV (adds a 'Type' enum key: Gain/Loss/Normal/CN LoH), Breakend (adds 'Retained' and 'Insertion' keys and uses Mate keying), Sample (adds a 'Sample' string key, no genomic fields), or Region (just Chr/Start/Stop). addFeatureFields also sets addGenomicFields and primaryKeyMode for you, so leave those unset when you use it (an assembly is still required for the genomic types). If you instead define the schema by hand, you MUST include the type's key fields yourself \u2014 e.g. a Variant catalog must have a field named 'Ref/Alt' of dataType s, or it will just be a plain region catalog. 'fields' is only for your own extra (non-key) columns. After creating, import rows with catalogImportSource / catalogImportDelimitedText. Administrative; use catalogCreateFromSystemTemplate to start from a built-in schema instead."
+      x-agent-expose: "progressive"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "fields"
+              properties:
+                name:
+                  type: "string"
+                description:
+                  type: "string"
+                group:
+                  type: "string"
+                primaryKeyMode:
+                  $ref: "#/components/schemas/CatalogKeyMode"
+                  type: "object"
+                  description: "How records are keyed. Unit = a single key per record \u2014 the standard choice for variant/region/CNV catalogs; use it unless you specifically need Mate (two key sets, e.g. breakends) or List (multiple key sets per record). A non-Unit genomic catalog requires named chr/start/stop columns in imported sources, so keep Unit to import coordinate-only sources like BED/VCF. Ignored when addFeatureFields is set (the type chooses the mode)."
+                addGenomicFields:
+                  type: "boolean"
+                  description: "Prepend the genomic key fields (Chr, Start, Stop) so the catalog supports genomic queries and coordinate-based imports. Set true for any variant/region/CNV catalog. Ignored when addFeatureFields is set (the type decides)."
+                addFeatureFields:
+                  $ref: "#/components/schemas/CatalogRecordType"
+                  type: "object"
+                  description: "Optional: add the standard KEY fields for a catalog feature type, the way addGenomicFields adds Chr/Start/Stop. Variant \u2192 adds 'Ref/Alt' (s) as a primary key with Chr/Start/Stop. CNV \u2192 adds 'Type' (enum: Gain/Loss/Normal/CN LoH) as a primary key with Chr/Start/Stop. Breakend \u2192 adds 'Retained' and 'Insertion' primary keys with Chr/Start/Stop and sets Mate keying. Sample \u2192 adds a 'Sample' (s) primary key, no genomic fields. Region \u2192 just Chr/Start/Stop. When set, it also sets addGenomicFields and primaryKeyMode, and you should list only your own non-key columns in 'fields'. Prefer this over hand-building the key fields."
+                assembly:
+                  type: "string"
+                  example: "GRCh_38,Chromosome,Homo sapiens"
+                fields:
+                  type: "array"
+                  items:
+                    $ref: "#/components/schemas/CatalogField"
+                    type: "object"
+                  description: "Your own extra (non-key) fields, each a CatalogField: at minimum name (display) and dataType (TSF short form: s=string, i=int, f=float, b=bool, e=enum), plus required (bool) and choices for enum fields. Do NOT set symbol \u2014 it is auto-generated from name (read it back from the created schema). Do NOT list key fields here that come from addGenomicFields (Chr/Start/Stop) or addFeatureFields (e.g. Ref/Alt, Type, Retained, Insertion, Sample)."
+                approvalCount:
+                  type: "number"
+                  format: "int32"
+                version:
+                  type: "string"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogInfo"
+                type: "object"
+  /reload/:
+    post:
+      operationId: "catalogsReload"
+      summary: "Reload all catalogs from the server catalogs directory"
+      description: "Administrative operation that re-scans the workspace catalogs directory and refreshes the in-memory catalog registry."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:manage"
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties: {}
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /filter/:
+    put:
+      operationId: "catalogsFilter"
+      summary: "Find catalogs matching schema criteria"
+      description: "Return the catalogs whose schema matches the given criteria (assembly, required fields/indexes, key mode, record type, approver count). A discovery read for locating a catalog by shape; for the full list use catalogsList."
+      x-agent-permission: "catalog:read"
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                assembly:
+                  type: "string"
+                  example: "GRCh_38,Chromosome,Homo sapiens"
+                fields:
+                  type: "array"
+                  items:
+                    $ref: "#/components/schemas/CatalogField"
+                    type: "object"
+                indexOnSymbol:
+                  type: "array"
+                  items:
+                    type: "string"
+                  example: "['classification']"
+                primaryKeyMode:
+                  $ref: "#/components/schemas/CatalogKeyMode"
+                  type: "object"
+                recordType:
+                  type: "array"
+                  items:
+                    $ref: "#/components/schemas/CatalogRecordType"
+                    type: "object"
+                requiredApprovers:
+                  type: "number"
+                  format: "int32"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/CatalogInfo"
+                  type: "object"
+  /namedDefault/{name}:
+    get:
+      operationId: "defaultNamedCatalog"
+      summary: "Resolve the default catalog for a named gene source (GenePreferences or GeneLists)"
+      description: "Of the catalogs matching the named source's schema for the given build, return the one whose id is the per-build default, otherwise the first schema match. Returns the chosen CatalogInfo, or an error if none is present. {name} is the source name, e.g. GenePreferences or GeneLists."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "name"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "assembly"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "GRCh_38,Chromosome,Homo sapiens"
+            description: "Coordinate system / build (e.g. 'GRCh_38,Chromosome,Homo sapiens'). Defaults to the server's configured assembly."
+          description: "Coordinate system / build (e.g. 'GRCh_38,Chromosome,Homo sapiens'). Defaults to the server's configured assembly."
+          example: "GRCh_38,Chromosome,Homo sapiens"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogInfo"
+                type: "object"
+  /source/:
+    get:
+      operationId: "catalogsList"
+      summary: "List all available catalogs"
+      description: "List every catalog in the workspace with its metadata (id, name, group, assembly, record type, record count). The starting point for catalog work. Pick a catalogId here, then use catalogInfo, catalogSchema, or catalogQuery. Cheap. By default only summary fields are returned; request the schema field via responseFields (or call catalogSchema) if you need field definitions."
+      x-agent-expose: "promoted"
+      x-agent-permission: "catalog:read"
+      x-agent-summary-fields:
+        - "id"
+        - "name"
+        - "group"
+        - "assembly"
+        - "recordType"
+        - "recordCount"
+        - "description"
+        - "exists"
+        - "size"
+        - "lastUpdate"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/CatalogInfo"
+                  type: "object"
+  /source/{catalogId}/info:
+    get:
+      operationId: "catalogInfo"
+      summary: "Get a catalog's metadata, including its record count"
+      description: "Return one catalog's metadata such as name, group, assembly, record type, permissions, schema, and recordCount. Use this to answer how many records a catalog has - recordCount is reported here WITHOUT reading the table, so prefer it over catalogQuery for a count. Cheap. By default the large schema field is omitted; request it via responseFields, or call catalogSchema, when you need field definitions."
+      x-agent-expose: "promoted"
+      x-agent-permission: "catalog:read"
+      x-agent-summary-fields:
+        - "id"
+        - "name"
+        - "group"
+        - "assembly"
+        - "recordType"
+        - "recordCount"
+        - "description"
+        - "exists"
+        - "size"
+        - "lastUpdate"
+        - "uuid"
+        - "writePermission"
+        - "managePermission"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogInfo"
+                type: "object"
+    put:
+      operationId: "catalogInfoUpdate"
+      summary: "Update a catalog's name, description, or group"
+      description: "Administrative operation that edits catalog metadata. Mutates catalog configuration."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                description:
+                  type: "string"
+                group:
+                  type: "string"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogInfo"
+                type: "object"
+  /source/{catalogId}/serverOptions:
+    get:
+      operationId: "catalogServerOptions"
+      summary: "Get a catalog's server permission configuration"
+      description: "Administrative read of the catalog's server-side access configuration (read/write/approve/publish groups and assignment restrictions)."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerCatalogOptions"
+                type: "object"
+    put:
+      operationId: "catalogUpdateServerOptions"
+      summary: "Update a catalog's server permission configuration"
+      description: "Administrative operation that changes the catalog's access configuration. Mutates catalog configuration."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "options"
+              properties:
+                options:
+                  $ref: "#/components/schemas/ServerCatalogOptions"
+                  type: "object"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerCatalogOptions"
+                type: "object"
+  /source/{catalogId}/schema:
+    get:
+      operationId: "catalogSchema"
+      summary: "Get a catalog's current schema (field definitions)"
+      description: "Return the catalog's current schema - the ordered field list with each field's symbol, data type, and metadata. Read this before building a catalogQuery filter or writing records, so you use valid field symbols. Cheap."
+      x-agent-expose: "promoted"
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogSchema"
+                type: "object"
+    put:
+      operationId: "catalogSchemaUpdate"
+      summary: "Update a catalog's schema (field definitions)"
+      description: "Administrative operation that replaces or updates the catalog's field definitions and records a change note. Mutates the catalog schema."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                fields:
+                  type: "array"
+                  items:
+                    $ref: "#/components/schemas/CatalogField"
+                    type: "object"
+                note:
+                  type: "string"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogSchema"
+                type: "object"
+  /source/{catalogId}/schema/data:
+    get:
+      operationId: "serializedCatalogSchema"
+      summary: "Get a catalog's schema serialized for saving as a template"
+      description: "Return the catalog schema as a serialized string suitable for saving as a reusable template. For the structured schema, use catalogSchema instead."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "schemaVersion"
+          in: "query"
+          required: false
+          schema:
+            type: "number"
+            format: "int32"
+            example: 3
+          example: 3
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/schemaUpdate:
+    post:
+      operationId: "catalogSchemaUpdateFromTemplate"
+      summary: "Apply a serialized schema to a catalog, updating metadata and appending new fields"
+      description: "Administrative operation that merges a serialized schema/template into the catalog, updating metadata and appending selected new fields. Mutates the catalog schema."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "schemaData"
+              properties:
+                schemaData:
+                  type: "string"
+                fieldsToAdd:
+                  type: "array"
+                  items:
+                    type: "number"
+                    format: "int32"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogSchema"
+                type: "object"
+  /source/{catalogId}/schema/versions:
+    get:
+      operationId: "catalogSchemaVersions"
+      summary: "List all historical schema versions for a catalog"
+      description: "Return every version of the catalog's schema, so you can inspect how the field definitions changed over time. Read-only."
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/CatalogSchema"
+                  type: "object"
+  /source/{catalogId}/schema/{version}:
+    get:
+      operationId: "catalogSchemaVersion"
+      summary: "Get a specific historical version of a catalog's schema"
+      description: "Return one numbered version of the catalog's schema (see catalogSchemaVersions for available version numbers). Read-only."
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "version"
+          in: "path"
+          required: true
+          schema:
+            type: "number"
+            format: "int32"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogSchema"
+                type: "object"
+  /source/{catalogId}/export:
+    get:
+      operationId: "catalogExport"
+      summary: "Export catalog records to a file in the workspace"
+      description: "Run a query (optionally filtered and sorted) and write the matching records to a file (TSF/TXT/VCF/XLSX) in the workspace, returning the output path. A full read that materializes a file; to read records into the response instead, use catalogQuery."
+      x-agent-cost: "expensive"
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "genomicQuery"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenomicQuery"
+
+        - name: "filterTree"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpressionNode"
+          description: "Optional filter, as an ExpressionNode object. A predicate is {op, field, value} where op is a word from OperatorType (Equals, NotEquals, Substring, StartsWith, EndsWith, LessThan, GreaterThan, IsNull, \u2026 \u2014 never a symbol like ==) and field is a field symbol from catalogSchema; combine predicates with {op: And|Or|Not, children: [ \u2026 ]}. Example: {\"op\": \"Equals\", \"field\": \"Sample\", \"value\": \"Imported Variants\"}."
+
+        - name: "orderby"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              $ref: "#/components/schemas/FieldSort"
+              type: "object"
+
+        - name: "fields"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "number"
+              format: "int32"
+
+        - name: "fieldsBySymbol"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "string"
+            example: "['chr', 'start', 'stop', 'refAlt', 'classification']"
+
+        - name: "outputPath"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "Documents/export.tsv"
+            description: "Workspace-relative path for the exported file (e.g. Documents/export.tsv)"
+          description: "Workspace-relative path for the exported file (e.g. Documents/export.tsv)"
+          example: "Documents/export.tsv"
+
+        - name: "format"
+          in: "query"
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutputFileType"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/recordByKey:
+    get:
+      operationId: "catalogRecordIdByKey"
+      summary: "Look up a record id from its primary key values"
+      description: "Resolve the record id for a record given its primary-key field values. Use it to turn a natural key into the record id that record-level calls (catalogRecord, catalogRecordState) expect. Cheap."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "keys"
+          in: "query"
+          required: true
+          schema:
+            type: "object"
+            example: "{'chr': 'X', 'start': 100, 'stop': 200, 'refAlt': 'A/G'}"
+            description: "Map of primary-key field symbol to value."
+          description: "Map of primary-key field symbol to value."
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/values:
+    get:
+      operationId: "catalogIndexValues"
+      summary: "List the distinct values of one indexed field"
+      description: "Return the unique values of a single indexed field, optionally with a per-value record count and last-edited timestamp, and optionally filtered. Use it to populate a value picker or to see the domain of a field without reading rows. For multi-field group-by counts use catalogAggregate. The field must be indexed. Cheap."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "field"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "classification"
+            description: "Field symbol to get unique values for (must be indexed)"
+          description: "Field symbol to get unique values for (must be indexed)"
+          example: "classification"
+
+        - name: "genomicQuery"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenomicQuery"
+
+        - name: "filterTree"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpressionNode"
+          description: "Optional filter, as an ExpressionNode object. A predicate is {op, field, value} where op is a word from OperatorType (Equals, NotEquals, Substring, StartsWith, EndsWith, LessThan, GreaterThan, IsNull, \u2026 \u2014 never a symbol like ==) and field is a field symbol from catalogSchema; combine predicates with {op: And|Or|Not, children: [ \u2026 ]}. Example: {\"op\": \"Equals\", \"field\": \"Sample\", \"value\": \"Imported Variants\"}."
+
+        - name: "includeCount"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "Include count of records for each unique value"
+          description: "Include count of records for each unique value"
+
+        - name: "includeLastEdited"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "Include last edited timestamp for each unique value"
+          description: "Include last edited timestamp for each unique value"
+
+        - name: "queryMode"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogQueryMode"
+
+        - name: "limit"
+          in: "query"
+          required: true
+          schema:
+            type: "number"
+            format: "int32"
+
+        - name: "offset"
+          in: "query"
+          required: false
+          schema:
+            type: "number"
+            format: "int32"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FieldIndexQueryResponse"
+                type: "object"
+  /source/{catalogId}/aggregate:
+    post:
+      operationId: "catalogAggregate"
+      summary: "Group records by one or more fields and compute counts server-side"
+      description:
+        - "Generalizes catalogIndexValues from single-field distinct-with-count to"
+        - "multi-dimensional group-by. Array fields in groupBy are unwound by"
+        - "default; multiple array fields in the same groupBy align by parallel"
+        - "index. Text keys are compared case-insensitively; the first-seen"
+        - "casing for each folded value is what appears in the response."
+        - "Per-group `count` is always returned. Distinct value counts of"
+        - "additional fields can be requested via countDistinct. The response"
+        - "always returns the full group set for the filtered input in"
+        - "unspecified order - no sort, no pagination knobs, no top-N cap."
+        - "Callers sort and slice client-side. Server-side maxGroups is the only"
+        - "backpressure mechanism; callers that hit it should tighten filterTree"
+        - "/ genomicQuery."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "groupBy"
+              properties:
+                genomicQuery:
+                  $ref: "#/components/schemas/GenomicQuery"
+                  type: "object"
+                filterTree:
+                  $ref: "#/components/schemas/ExpressionNode"
+                  type: "object"
+                queryMode:
+                  $ref: "#/components/schemas/CatalogQueryMode"
+                  type: "object"
+                groupBy:
+                  type: "array"
+                  items:
+                    $ref: "#/components/schemas/AggregateGroupSpec"
+                    type: "object"
+                countDistinct:
+                  type: "array"
+                  items:
+                    type: "string"
+                  description:
+                    - "Optional list of field symbols. For each entry, every AggregateGroup"
+                    - "row gains a column keyed `distinct.<fieldSymbol>` whose value is the"
+                    - "per-group distinct value count. Array fields are unwound and"
+                    - "parallel-index aligned with any unwound groupBy fields."
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AggregateResponse"
+                type: "object"
+  /source/{catalogId}/recordCountsByBaselineUser:
+    get:
+      operationId: "catalogRecordCountsByBaselineUser"
+      summary: "Count custom, modified, and archived records relative to baseline authors"
+      description: "Given a set of baseline/authority user ids, return how many records are custom (authored by someone else), modified (a baseline record edited by a user), or archived. Useful for reporting how far a catalog has diverged from its authority source. Cheap."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "baselineUserIds"
+          in: "query"
+          required: true
+          schema:
+            type: "array"
+            items:
+              type: "string"
+            example: "['System', 'CPICandFDA']"
+            description: "All user IDs to treat as baseline/authority (e.g. [\"System\", \"CPICandFDA\"])"
+          description: "All user IDs to treat as baseline/authority (e.g. [\"System\", \"CPICandFDA\"])"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogRecordCountsByBaselineUserResponse"
+                type: "object"
+  /source/{catalogId}/continue/{cursor}:
+    post:
+      operationId: "catalogReadContinue"
+      summary: "Fetch the next page of a cursor-based catalogQuery"
+      description: "Continue a catalogQuery that was started with enableCursor, using the cursor returned by the previous response, to fetch the next page of records. Same expensive row-reading cost as catalogQuery."
+      x-agent-cost: "expensive"
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "cursor"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                format:
+                  type: "array"
+                  items:
+                    $ref: "#/components/schemas/FormatOption"
+                    type: "object"
+                  description: "Response sections to return."
+                limit:
+                  type: "number"
+                  format: "int32"
+                  description: "Max records per page (1-1000)."
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryResponse"
+                type: "object"
+  /source/{catalogId}/recordState/{recordId}:
+    get:
+      operationId: "catalogRecordState"
+      summary: "Get the draft and published state of one record"
+      description: "Return a record's current draft and/or published versions (per the states filter). Use it to see whether a record has pending edits and to get the historyId that lifecycle calls need. Cheap single-record read."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "recordId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "states"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              $ref: "#/components/schemas/RecordPublishedState"
+              type: "object"
+
+        - name: "fields"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "number"
+              format: "int32"
+
+        - name: "fieldsBySymbol"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "string"
+            example: "['classification']"
+
+        - name: "format"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              $ref: "#/components/schemas/FormatOption"
+              type: "object"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogRecordState"
+                type: "object"
+  /source/{catalogId}/draftSummary:
+    get:
+      operationId: "catalogDraftSummary"
+      summary: "Summarize the catalog's drafts as added, changed, or deleted relative to published baselines"
+      description:
+        - "Replaces the client-side N+1 pattern of enumerating drafts and then issuing"
+        - "one catalogRecordState per draft - first to classify their state, and again"
+        - "to fetch the draftHistoryId needed by catalogRecordPublish. Returns"
+        - "per-catalog totals always; optionally also returns a paginated projection of"
+        - "DraftRecords that each carry their draftHistoryId inline. Only the draft"
+        - "body is projected; callers that need the baseline body can follow up with a"
+        - "separate catalogQuery keyed by recordId."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "genomicQuery"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenomicQuery"
+
+        - name: "filterTree"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpressionNode"
+          description: "Optional filter expression restricted to the draft set"
+
+        - name: "totalsOnly"
+          in: "query"
+          required: true
+          schema:
+            type: "boolean"
+            description: "If true, only include totals in response"
+          description: "If true, only include totals in response"
+
+        - name: "limit"
+          in: "query"
+          required: true
+          schema:
+            type: "number"
+            format: "int32"
+            description: "Only used when totalsOnly is false, ignored otherwise"
+          description: "Only used when totalsOnly is false, ignored otherwise"
+
+        - name: "offset"
+          in: "query"
+          required: false
+          schema:
+            type: "number"
+            format: "int32"
+
+        - name: "enableCursor"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "Reserved for future cursor-based paging; ignored in v1"
+          description: "Reserved for future cursor-based paging; ignored in v1"
+
+        - name: "fields"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "number"
+              format: "int32"
+
+        - name: "fieldsBySymbol"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "string"
+
+        - name: "format"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              $ref: "#/components/schemas/FormatOption"
+              type: "object"
+
+        - name: "states"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              $ref: "#/components/schemas/DraftState"
+              type: "object"
+            description:
+              - "Filter the records output by DraftState. Totals always reflect the full"
+              - "filtered draft set and are not affected by this parameter. Defaults to"
+              - "all three states."
+          description:
+            - "Filter the records output by DraftState. Totals always reflect the full"
+            - "filtered draft set and are not affected by this parameter. Defaults to"
+            - "all three states."
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DraftSummaryResponse"
+                type: "object"
+  /source/{catalogId}/record/{recordId}:
+    get:
+      operationId: "catalogRecord"
+      summary: "Get a single catalog record by id"
+      description: "Return one record by its record id, optionally at a specific published/draft state or a specific historyId, projected to chosen fields. Cheap single-record read; use catalogQuery to find records by filter."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "recordId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "state"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordPublishedState"
+
+        - name: "historyId"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+
+        - name: "fields"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "number"
+              format: "int32"
+
+        - name: "fieldsBySymbol"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "string"
+            example: "['chr', 'start', 'stop', 'refAlt', 'classification']"
+
+        - name: "format"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              $ref: "#/components/schemas/FormatOption"
+              type: "object"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogRecord"
+                type: "object"
+  /source/{catalogId}/write:
+    post:
+      operationId: "catalogWriteRecord"
+      summary: "Write or update a single catalog record"
+      description: "Insert a new record, or update one by passing recordId. First read the catalog's fields with catalogs:catalogSchema: it gives each field's symbol and, for enum fields, the exact allowed values. Provide the record in the object parameter, keyed by field symbol (do NOT pass the fields as top-level parameters); for an enum field use its exact allowed value string (e.g. 'Pathogenic'), never a numeric code. Or pass array as an ordered value list in the schema's field order. Writes catalog data, so the runtime requires user approval."
+      x-agent-expose: "progressive"
+      x-agent-cost: "cheap"
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                recordId:
+                  type: "string"
+                  description: "Id of an existing record to update; omit to insert a new record."
+                array:
+                  type: "array"
+                  items:
+                    type: "object"
+                  example: "['7', 140753335, 140753336, 'A/T', 'Pathogenic']"
+                  description: "Alternative to object: the record's values as an ordered list in the catalog's schema field order (from catalogs:catalogSchema)."
+                object:
+                  type: "object"
+                  example: "{'Chr': '7', 'Start': 140753335, 'Stop': 140753336, 'RefAlt': 'A/T', 'Classification': 'Pathogenic'}"
+                  description: "The record's fields as an object keyed by field symbol (from catalogs:catalogSchema). Put every field here, not as top-level parameters; use a field's exact enum value string for enum fields."
+                returnFormat:
+                  type: "array"
+                  items:
+                    $ref: "#/components/schemas/FormatOption"
+                    type: "object"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogRecord"
+                type: "object"
+  /source/{catalogId}/history/{recordId}:
+    get:
+      operationId: "catalogRecordHistory"
+      summary: "Get the version history of a single record"
+      description: "Return the successive versions of one record (edits, approvals, publishes), useful for auditing how a record changed. Cheap paged read."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "recordId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "fields"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "number"
+              format: "int32"
+
+        - name: "fieldsBySymbol"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "string"
+
+        - name: "limit"
+          in: "query"
+          required: true
+          schema:
+            type: "number"
+            format: "int32"
+
+        - name: "offset"
+          in: "query"
+          required: false
+          schema:
+            type: "number"
+            format: "int32"
+
+        - name: "format"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              $ref: "#/components/schemas/FormatOption"
+              type: "object"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/CatalogRecord"
+                  type: "object"
+  /source/{catalogId}/assign/{recordId}:
+    put:
+      operationId: "catalogRecordAssign"
+      summary: "Assign a record to a user or group"
+      description: "Assign ownership of a record to a user or group (creating a draft for published records). Mutates the record."
+      x-agent-expose: "progressive"
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "recordId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "assignToId"
+                - "assignToName"
+                - "historyId"
+              properties:
+                assignToId:
+                  type: "string"
+                assignToName:
+                  type: "string"
+                historyId:
+                  type: "string"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/deleteUnpublishedDrafts/{recordId}:
+    delete:
+      operationId: "catalogDeleteUnpublishedDrafts"
+      summary: "Delete a record's unpublished draft versions"
+      description: "Destructive. Discards every pending draft version of a record, reverting to its published baseline; for a record that was newly added and never published (a draft, status InProgress) this removes it entirely. This is how you remove a draft created by catalogWriteRecord. Get the recordId from catalogRecordIdByKey (primary-key values) or catalogQuery. Mutates the catalog, so the runtime requires user approval."
+      x-agent-expose: "progressive"
+      x-agent-cost: "cheap"
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "recordId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/delete/{recordId}:
+    delete:
+      operationId: "catalogDraftDelete"
+      summary: "Delete a specific draft version of a record"
+      description: "Destructive. Removes one draft version (identified by historyId) of a record."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "recordId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "historyId"
+              properties:
+                historyId:
+                  type: "string"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/draftArchive/{recordId}:
+    post:
+      operationId: "catalogRecordDraftArchive"
+      summary: "Propose a delete of a published record"
+      description:
+        - "Creates a DraftArchive history entry for the record, copying the latest"
+        - "published baseline's field values. The DraftArchive is a pending"
+        - "lifecycle change (analogous to a Draft edit) that requires"
+        - "catalogRecordArchive to be confirmed, or catalogDraftDelete to be"
+        - "dismissed. Errors if the record has no published baseline or already"
+        - "has a pending change (Draft / Approved / DraftArchive) as the latest"
+        - "record; callers should cancel the pending change first. Returns the"
+        - "historyId of the new DraftArchive row."
+      x-agent-expose: "progressive"
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "recordId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties: {}
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/archive/{recordId}:
+    post:
+      operationId: "catalogRecordArchive"
+      summary: "Archive a catalog record (confirm a proposed deletion)"
+      description: "Destructive. Confirms a pending DraftArchive, moving the record out of the published set. Requires publish permission."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:publish"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "recordId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "historyId"
+              properties:
+                historyId:
+                  type: "string"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/bulkAction:
+    post:
+      operationId: "catalogBulkAction"
+      summary: "Apply a lifecycle action to every record matching a filter"
+      description: "Server-side bulk equivalent of the per-record lifecycle actions. The filter (genomicQuery / filterTree / queryMode) selects the full record set - not just a loaded page - and the action is applied to every match whose latest version is in an applicable status. recordIds listed in excludeRecordIds are skipped, which supports the select-all-then-deselect UI flow. ConfirmDeletion additionally requires the catalog publish permission. Returns a summary with per-record errors; a failure on one record does not abort the batch."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "action"
+              properties:
+                action:
+                  $ref: "#/components/schemas/CatalogBulkActionType"
+                  type: "object"
+                genomicQuery:
+                  $ref: "#/components/schemas/GenomicQuery"
+                  type: "object"
+                filterTree:
+                  $ref: "#/components/schemas/ExpressionNode"
+                  type: "object"
+                queryMode:
+                  $ref: "#/components/schemas/CatalogQueryMode"
+                  type: "object"
+                excludeRecordIds:
+                  type: "array"
+                  items:
+                    type: "string"
+                assignToId:
+                  type: "string"
+                  description: "For the Assign action - the assignee user/group id (empty clears the assignment)"
+                assignToName:
+                  type: "string"
+                  description: "For the Assign action - the assignee display name"
+                limit:
+                  type: "number"
+                  format: "int32"
+                  description: "Max records to process this call. Chunked walk - call repeatedly with afterRecordId until done. Omit/0 processes the whole set in one call."
+                afterRecordId:
+                  type: "string"
+                  description: "Keyset cursor - only process records whose id is greater (pass the previous response's nextCursor)"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkActionResult"
+                type: "object"
+  /source/{catalogId}/publish/{recordId}:
+    post:
+      operationId: "catalogRecordPublish"
+      summary: "Publish a catalog record"
+      description: "Publish an approved draft version of a record, making it the public baseline. Mutates the record's lifecycle state; requires publish permission."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:publish"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "recordId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "historyId"
+              properties:
+                historyId:
+                  type: "string"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/approve/{recordId}:
+    post:
+      operationId: "catalogRecordApprove"
+      summary: "Approve a catalog record"
+      description: "Record an approval on a draft version of a record (toward the required approval count). Mutates the record's lifecycle state; requires approve permission."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:approve"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "recordId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "historyId"
+              properties:
+                historyId:
+                  type: "string"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/expunge/{recordId}:
+    post:
+      operationId: "catalogRecordExpunge"
+      summary: "Permanently delete a catalog record"
+      description: "Destructive and irreversible. Permanently removes a record version from the catalog, including its history. Requires expunge permission."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:expunge"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "recordId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "historyId"
+              properties:
+                historyId:
+                  type: "string"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/importDelimitedText:
+    post:
+      operationId: "catalogImportDelimitedText"
+      summary: "Import records into a catalog from a delimited text (TSV/CSV) file"
+      description: "Bulk-import records from a workspace TSV/CSV file into a catalog. Runs asynchronously and returns a processId to poll. Workflow: read the file's columns with preview:gaSourceMeta (their symbols) and the catalog's fields with catalogs:catalogInfo (their schema symbols), then supply fieldMapping to line them up. Mutates catalog data. For a variant catalog whose key is normalized ref/alt, first resolve any free-text variant column with lookup:variantQuery and stage a file with the normalized columns."
+      x-agent-expose: "progressive"
+      x-agent-cost: "cheap"
+      x-agent-permission: "catalog:write"
+      x-agent-returns-process: true
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "inputPath"
+              properties:
+                delimiter:
+                  type: "string"
+                  description: "Field delimiter override. Auto-detected from the extension by default (tab for .tsv, comma for .csv); set to \",\" or \"\\t\" to force it."
+                listDelimiter:
+                  type: "string"
+                  description: "Delimiter that separates multiple values within a single list-typed field, if any."
+                fieldMapping:
+                  type: "object"
+                  description: "Object mapping each input column symbol (from preview:gaSourceMeta) to the target catalog field symbol (from catalogs:catalogInfo), e.g. { \"chromosome\": \"chr\", \"gene_symbol\": \"gene\" }. Omit to auto-map input columns to catalog fields whose symbols match."
+                inputPath:
+                  type: "string"
+                  example: "Documents/Uploads/variants.tsv"
+                  description: "Workspace-relative path to the delimited-text input file"
+                authorUserIdOrEmail:
+                  type: "string"
+                  description: "If set, attribute every imported record to this user id or email instead of the calling user (e.g. a baseline authority such as 'goldenhelix'). authorFullName should also be set."
+                authorFullName:
+                  type: "string"
+                  description: "Display name paired with authorUserIdOrEmail for imported-record attribution."
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/importSource:
+    post:
+      operationId: "catalogImportSource"
+      summary: "Import records from a source file into a catalog"
+      description: "Bulk-import records from a workspace source file (e.g. a .tsf) into the catalog, mapping fields. Mutates catalog data."
+      x-agent-expose: "progressive"
+      x-agent-permission: "catalog:write"
+      x-agent-returns-process: true
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "inputPath"
+              properties:
+                inputPath:
+                  type: "string"
+                  example: "Documents/variants.tsf"
+                  description: "Workspace-relative path to the source file (e.g. Documents/variants.tsf)"
+                fieldMapping:
+                  type: "object"
+                authorUserIdOrEmail:
+                  type: "string"
+                  description: "If set, attribute every imported record to this user id or email instead of the calling user (e.g. a baseline authority such as 'goldenhelix'). authorFullName should also be set."
+                authorFullName:
+                  type: "string"
+                  description: "Display name paired with authorUserIdOrEmail for imported-record attribution."
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/importGenePreferences:
+    post:
+      operationId: "catalogImportGenePreferences"
+      summary: "Import gene-preference records, deriving GeneID/GeneName and locus fields from a typed gene reference"
+      description: "Writes draft records to a GenePreferences catalog from records that carry only a typed gene reference (geneId, transcriptId, or geneName). For each record the canonical Entrez GeneID (the catalog's primary key) is resolved, GeneName is filled when absent, and the Chr/Start/Stop data columns are filled from the gene's coordinates for the catalog's build - a transcriptId narrows the locus to that transcript, otherwise the whole-gene span is used. Remaining preference columns ride in the per-record `fields` object, keyed by field symbol. Records whose gene can't be resolved for the build are reported as per-record errors and do not abort the batch."
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "records"
+              properties:
+                records:
+                  type: "array"
+                  items:
+                    $ref: "#/components/schemas/GenePreferenceImportRecord"
+                    type: "object"
+                errorMode:
+                  $ref: "#/components/schemas/ErrorMode"
+                  type: "object"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/WriteRecordResult"
+                  type: "object"
+  /source/{catalogId}/importGeneLists:
+    post:
+      operationId: "catalogImportGeneLists"
+      summary: "Import gene-list records, resolving member-gene coordinates into aligned locus arrays"
+      description: "Writes draft records to a GeneLists (List-mode) catalog from records that list their member genes by typed reference (geneIds, transcriptIds, and/or geneNames). Each member is resolved to a canonical GeneID plus coordinates for the catalog's build; the record's GeneNames/GeneIds and the aligned Chr/Start/Stop locus arrays are filled in. A Uuid is generated when omitted. Members with no coordinates for the build are dropped from the locus arrays; a list with no resolvable members is reported as a per-record error."
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "records"
+              properties:
+                records:
+                  type: "array"
+                  items:
+                    $ref: "#/components/schemas/GeneListImportRecord"
+                    type: "object"
+                errorMode:
+                  $ref: "#/components/schemas/ErrorMode"
+                  type: "object"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/WriteRecordResult"
+                  type: "object"
+  /source/{catalogId}/importGenePreferencesFile:
+    post:
+      operationId: "catalogImportGenePreferencesFile"
+      summary: "Import gene-preference records from a delimited-text file, deriving coordinates in the background"
+      description: "File-based counterpart of importGenePreferences. Reads a delimited-text (TSV/CSV) file from the workspace, builds one GenePreferenceImportRecord per row by mapping columns to record fields via columnMapping, then resolves and writes the records exactly as importGenePreferences does (see it for the resolution and derived-field rules). The read, resolve, and write run as a background process; the returned string is a process id that can be polled on /api/catalogs/ps/{processId} for progress and completion."
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "inputPath"
+                - "columnMapping"
+              properties:
+                inputPath:
+                  type: "string"
+                  description: "Workspace-relative path to the delimited-text input file"
+                columnMapping:
+                  type: "object"
+                  description: "Maps each input column name to a GenePreferenceImportRecord field. The recognized record fields are geneId, transcriptId and geneName; any other target is treated as a catalog field symbol and passed through as a preference column. For example a Symbol column can map to geneName and an Inheritance column to PreferredInheritance."
+                delimiter:
+                  type: "string"
+                  description: "Field delimiter; auto-detected from the file when omitted (comma for .csv)"
+                errorMode:
+                  $ref: "#/components/schemas/ErrorMode"
+                  type: "object"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/importGeneListsFile:
+    post:
+      operationId: "catalogImportGeneListsFile"
+      summary: "Import gene-list records from a delimited-text file, resolving member coordinates in the background"
+      description: "File-based counterpart of importGeneLists. Reads a delimited-text (TSV/CSV) file from the workspace, builds one GeneListImportRecord per row by mapping columns to record fields via columnMapping, then resolves and writes the lists exactly as importGeneLists does. The member-gene columns (geneIds / transcriptIds / geneNames) hold a listDelimiter-separated list of references within a single cell. The read, resolve, and write run as a background process; the returned string is a process id that can be polled on /api/catalogs/ps/{processId} for progress and completion."
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "inputPath"
+                - "columnMapping"
+              properties:
+                inputPath:
+                  type: "string"
+                  description: "Workspace-relative path to the delimited-text input file"
+                columnMapping:
+                  type: "object"
+                  description: "Maps each input column name to a GeneListImportRecord field. The recognized fields are uuid, name, description, sourceName, sourceUrl, geneIds, transcriptIds and geneNames. For example a Panel column can map to name and a Genes column to geneNames."
+                delimiter:
+                  type: "string"
+                  description: "Field delimiter; auto-detected from the file when omitted (comma for .csv)"
+                listDelimiter:
+                  type: "string"
+                  description: "Separator for the member-gene lists within the geneIds/transcriptIds/geneNames cells (defaults to '|')"
+                errorMode:
+                  $ref: "#/components/schemas/ErrorMode"
+                  type: "object"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/rebaseSource:
+    post:
+      operationId: "catalogRebaseSource"
+      summary: "Rebase catalog records against a new version of an authority source. On success (non-preview), sets the catalog source version to \"sourceUserId|sourceVersion\"."
+      description: "Reconcile the catalog against a newer authority source file - update untouched records, auto-merge non-conflicting changes, flag conflicts, and propose deletions. Mutates catalog data unless previewOnly is set."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "inputPath"
+                - "sourceUserId"
+                - "baselineUserIds"
+              properties:
+                inputPath:
+                  type: "string"
+                  example: "Documents/CPICandFDA-2026.tsf"
+                  description: "Workspace-relative path to the authority source file"
+                sourceUserId:
+                  type: "string"
+                  description: "User ID to write authority records with (e.g. \"CPICandFDA\")"
+                baselineUserIds:
+                  type: "array"
+                  items:
+                    type: "string"
+                  description: "All source user IDs to treat as authority in history detection"
+                additiveOnly:
+                  type: "boolean"
+                  description: "If true, only add/update records, skip proposed deletions"
+                fieldMapping:
+                  type: "object"
+                previewOnly:
+                  type: "boolean"
+                  description: "If true, run analysis and return counts without modifying any records"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /source/{catalogId}/events:
+    get:
+      operationId: "catalogEvents"
+      summary: "Get the audit event log for a catalog"
+      description: "Return the catalog's audit log of bulk and administrative actions (who did what, when, with counts and details). Cheap paged read."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "limit"
+          in: "query"
+          required: true
+          schema:
+            type: "number"
+            format: "int32"
+
+        - name: "offset"
+          in: "query"
+          required: false
+          schema:
+            type: "number"
+            format: "int32"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/CatalogEvent"
+                  type: "object"
+  /source/{catalogId}/sourceVersion:
+    get:
+      operationId: "catalogSourceVersion"
+      summary: "Get the catalog's authority source version string"
+      description: "Return the catalog's recorded authority source version (e.g. the source user and version it was last rebased against). Cheap."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+    put:
+      operationId: "catalogSetSourceVersion"
+      summary: "Set the catalog's authority source version string"
+      description: "Administrative operation that overwrites the recorded authority source version. Mutates catalog configuration."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "version"
+              properties:
+                version:
+                  type: "string"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+components:
+  schemas:
+    CatalogApiInfo:
+      type: "object"
+      properties:
+        version:
+          type: "string"
+          example: "1.0.0"
+        supportsApproval:
+          type: "boolean"
+          example: true
+      required:
+        - "version"
+        - "supportsApproval"
+
+    CatalogQueryMode:
+      type: "string"
+      enum:
+        - "LatestPublishedRecord"
+        - "LatestActiveRecord"
+        - "RecordActivity"
+
+    CatalogBulkActionType:
+      type: "string"
+      enum:
+        - "DraftArchive"
+        - "ConfirmDeletion"
+        - "DiscardPending"
+        - "NewDraft"
+        - "Approve"
+        - "Publish"
+        - "Assign"
+
+    CatalogRecordType:
+      type: "string"
+      enum:
+        - "Variant"
+        - "CNV"
+        - "Breakend"
+        - "Region"
+        - "Sample"
+        - "Tabular"
+
+    CatalogFieldValidatorType:
+      type: "string"
+      enum:
+        - "Date"
+        - "Url"
+        - "Email"
+
+    WriteRecordResult:
+      type: "object"
+      properties:
+        recordId:
+          type: "string"
+          example: "record-1234"
+        errorRecord:
+          type: "object"
+        errorMessage:
+          type: "string"
+
+    CatalogFieldMeta:
+      type: "object"
+      properties:
+        isHtmlContent:
+          type: "boolean"
+        isJsonContent:
+          type: "boolean"
+        isPrimaryKey:
+          type: "boolean"
+        isIndexed:
+          type: "boolean"
+        urlTemplate:
+          type: "string"
+        control:
+          type: "string"
+        placeholder:
+          type: "string"
+        lineHeight:
+          type: "number"
+          format: "int32"
+        min:
+          type: "number"
+          format: "int32"
+        max:
+          type: "number"
+          format: "int32"
+        precision:
+          type: "number"
+          format: "int32"
+        step:
+          type: "number"
+          format: "int32"
+        minLength:
+          type: "number"
+          format: "int32"
+        maxLength:
+          type: "number"
+          format: "int32"
+        activeText:
+          type: "string"
+        inactiveText:
+          type: "string"
+        displayUnit:
+          type: "string"
+        validator:
+          $ref: "#/components/schemas/CatalogFieldValidatorType"
+          type: "object"
+        pattern:
+          type: "string"
+        defaultValue:
+          type: "object"
+        defaultMode:
+          type: "string"
+        hidden:
+          type: "boolean"
+        editable:
+          type: "boolean"
+        labels:
+          type: "array"
+          items:
+            type: "string"
+        isMetaField:
+          type: "boolean"
+
+    CatalogFieldEnum:
+      type: "object"
+      properties:
+        name:
+          type: "string"
+        value:
+          type: "number"
+          format: "int32"
+        doc:
+          type: "string"
+        meta:
+          type: "object"
+      required:
+        - "name"
+        - "value"
+
+    CatalogField:
+      type: "object"
+      properties:
+        fId:
+          type: "number"
+          format: "int32"
+          example: 0
+        name:
+          type: "string"
+          description: "The field's display name (what users see). The symbol is derived from this, so this is the only name you set."
+          example: "Ref/Alt"
+        symbol:
+          type: "string"
+          description: "The code identifier used as the record object key. Do NOT set this when creating fields \u2014 the server derives it from name (spaces/punctuation removed to a valid identifier). It is returned so you can see the generated symbol; only supply it to reference an existing field."
+          example: "refAlt"
+        dataType:
+          type: "string"
+          example: "s"
+        required:
+          type: "boolean"
+        doc:
+          type: "string"
+          example: "The reference and alt allele"
+        meta:
+          $ref: "#/components/schemas/CatalogFieldMeta"
+          type: "object"
+        choices:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/CatalogFieldEnum"
+            type: "object"
+      required:
+        - "name"
+        - "symbol"
+        - "dataType"
+        - "required"
+
+    CatalogKeyMode:
+      type: "string"
+      enum:
+        - "Unit"
+        - "Mate"
+        - "List"
+
+    CatalogSchemaFormat:
+      type: "string"
+      enum:
+        - "YAML"
+        - "JSON"
+
+    CatalogTemplate:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+        name:
+          type: "string"
+        group:
+          type: "string"
+      required:
+        - "id"
+        - "name"
+        - "group"
+
+    CatalogSchema:
+      type: "object"
+      properties:
+        version:
+          type: "number"
+          format: "int32"
+          example: 0
+        note:
+          type: "string"
+        created:
+          type: "string"
+          example: "2019-06-24T00:00:00.000Z"
+        createdBy:
+          type: "string"
+          example: "Example User <user@example.com>"
+        primaryKeyMode:
+          $ref: "#/components/schemas/CatalogKeyMode"
+          type: "object"
+        fields:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/CatalogField"
+            type: "object"
+      required:
+        - "version"
+        - "note"
+        - "created"
+        - "createdBy"
+        - "primaryKeyMode"
+        - "fields"
+
+    CatalogUser:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+        name:
+          type: "string"
+          example: "Example User"
+      required:
+        - "id"
+        - "name"
+
+    ServerCatalogOptions:
+      type: "object"
+      properties:
+        saveDebouncePeriod:
+          type: "number"
+          format: "int32"
+        restrictedToAssigned:
+          type: "boolean"
+        unrestrictedGroups:
+          type: "array"
+          items:
+            type: "string"
+        restrictedToAssignedGroups:
+          type: "array"
+          items:
+            type: "string"
+        catalogReadGroups:
+          type: "array"
+          items:
+            type: "string"
+        catalogWriteGroups:
+          type: "array"
+          items:
+            type: "string"
+        catalogApproveGroups:
+          type: "array"
+          items:
+            type: "string"
+        catalogPublishGroups:
+          type: "array"
+          items:
+            type: "string"
+      required:
+        - "restrictedToAssigned"
+        - "unrestrictedGroups"
+        - "restrictedToAssignedGroups"
+        - "catalogReadGroups"
+        - "catalogWriteGroups"
+        - "catalogApproveGroups"
+        - "catalogPublishGroups"
+
+    CatalogInfo:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          example: "acmgvariants"
+        supportsApproval:
+          type: "boolean"
+          example: true
+        supportsGenomicQueries:
+          type: "boolean"
+        annotationUrl:
+          type: "string"
+        exists:
+          type: "boolean"
+        size:
+          type: "number"
+          format: "int32"
+          example: 1234
+        name:
+          type: "string"
+          example: "Variant Catalog"
+        uuid:
+          type: "string"
+          example: "00000000-0000-0000-0000-000000000000"
+        description:
+          type: "string"
+          example: "Catalog description"
+        group:
+          type: "string"
+          example: "VSClinical"
+        assembly:
+          type: "string"
+          example: "GRCh38,Chromosome,Homo sapiens"
+        recordType:
+          $ref: "#/components/schemas/CatalogRecordType"
+          type: "object"
+        recordCount:
+          type: "number"
+          format: "int32"
+          example: 1234
+        lastUpdate:
+          type: "string"
+          example: "2019-06-24T00:00:00.000Z"
+        created:
+          type: "string"
+          example: "2019-06-24T00:00:00.000Z"
+        schema:
+          $ref: "#/components/schemas/CatalogSchema"
+          type: "object"
+        errorMessage:
+          type: "string"
+        writePermission:
+          type: "boolean"
+        managePermission:
+          type: "boolean"
+        approvePermission:
+          type: "boolean"
+        publishPermission:
+          type: "boolean"
+      required:
+        - "id"
+        - "supportsApproval"
+        - "supportsGenomicQueries"
+        - "annotationUrl"
+        - "exists"
+        - "size"
+        - "name"
+        - "uuid"
+        - "description"
+        - "group"
+        - "recordType"
+        - "lastUpdate"
+        - "created"
+        - "writePermission"
+        - "managePermission"
+        - "approvePermission"
+        - "publishPermission"
+
+    ErrorMode:
+      type: "string"
+      enum:
+        - "Strict"
+        - "SkipInvalidFields"
+        - "SkipBadRecords"
+        - "FillDefaultValues"
+
+    OutputFileType:
+      type: "string"
+      enum:
+        - "TSF"
+        - "TXT"
+        - "VCF"
+        - "XLSX"
+
+    FormatOption:
+      type: "string"
+      enum:
+        - "values"
+        - "objects"
+        - "fieldNames"
+        - "fieldMetas"
+        - "recordIds"
+        - "recordErrors"
+        - "serializedQuery"
+
+    ResponseData:
+      type: "object"
+      properties:
+        fields:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/CatalogField"
+            type: "object"
+        fieldNames:
+          type: "array"
+          items:
+            type: "string"
+        recordCount:
+          type: "number"
+          format: "int32"
+        recordIds:
+          type: "array"
+          items:
+            type: "string"
+        serializedQuery:
+          type: "string"
+        values:
+          type: "array"
+          items:
+            type: "array"
+            items:
+              type: "object"
+        objects:
+          type: "array"
+          items:
+            type: "object"
+        recordErrors:
+          type: "array"
+          items:
+            type: "object"
+        recordAssignment:
+          type: "string"
+
+    QueryResponse:
+      type: "object"
+      properties:
+        limit:
+          type: "number"
+          format: "int32"
+        offset:
+          type: "number"
+          format: "int32"
+        count:
+          type: "number"
+          format: "int32"
+        hasMore:
+          type: "boolean"
+        took:
+          type: "number"
+          format: "int32"
+        cursor:
+          type: "string"
+          description: "Opaque resume token for stateful paging"
+        data:
+          $ref: "#/components/schemas/ResponseData"
+          type: "object"
+      required:
+        - "offset"
+        - "count"
+        - "hasMore"
+        - "took"
+        - "data"
+
+    FieldIndexQueryResponse:
+      type: "object"
+      properties:
+        limit:
+          type: "number"
+          format: "int32"
+        offset:
+          type: "number"
+          format: "int32"
+        count:
+          type: "number"
+          format: "int32"
+        hasMore:
+          type: "boolean"
+        took:
+          type: "number"
+          format: "int32"
+        values:
+          type: "array"
+          items:
+            type: "object"
+      required:
+        - "offset"
+        - "count"
+        - "hasMore"
+        - "took"
+        - "values"
+
+    CatalogRecordCountsByBaselineUserResponse:
+      type: "object"
+      properties:
+        customRecordCount:
+          type: "number"
+          format: "int32"
+          description: "Count of records whose original author is not the baseline user."
+        modifiedRecordCount:
+          type: "number"
+          format: "int32"
+          description: "Count of records whose original author is the baseline user but current author is not."
+        archivedRecordCount:
+          type: "number"
+          format: "int32"
+          description: "Count of records that are archived and whose original author is the baseline user."
+        error:
+          type: "string"
+          description: "Error message when the request failed."
+      required:
+        - "customRecordCount"
+        - "modifiedRecordCount"
+        - "archivedRecordCount"
+
+    CatalogRebaseSourceResponse:
+      type: "object"
+      properties:
+        updatedCount:
+          type: "number"
+          format: "int32"
+          description: "Records overwritten from authority source (untouched by user)"
+        mergedCount:
+          type: "number"
+          format: "int32"
+          description: "Records auto-merged with no field conflicts"
+        conflictCount:
+          type: "number"
+          format: "int32"
+          description: "Records with field-level conflicts (draft created for review)"
+        deletedCount:
+          type: "number"
+          format: "int32"
+          description: "Records proposed for deletion (DraftArchive created)"
+        addedCount:
+          type: "number"
+          format: "int32"
+          description: "New records added from authority source"
+        error:
+          type: "string"
+      required:
+        - "updatedCount"
+        - "mergedCount"
+        - "conflictCount"
+        - "deletedCount"
+        - "addedCount"
+
+    CatalogEvent:
+      type: "object"
+      properties:
+        id:
+          type: "number"
+          format: "int32"
+        timestamp:
+          type: "string"
+          description: "ISO 8601 timestamp"
+        userId:
+          type: "string"
+        userName:
+          type: "string"
+        actionName:
+          type: "string"
+          description: "Human-readable action description"
+        actionData:
+          type: "object"
+          description: "JSON details (source URL, counts, duration, etc.)"
+      required:
+        - "id"
+        - "timestamp"
+        - "userId"
+        - "userName"
+        - "actionName"
+
+    RecordPublishedState:
+      type: "string"
+      enum:
+        - "Public"
+        - "InProgress"
+
+    CatalogRecord:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+        status:
+          $ref: "#/components/schemas/RecordPublishedState"
+          type: "object"
+        historyId:
+          type: "string"
+        historyCount:
+          type: "number"
+          format: "int32"
+        approvedBy:
+          type: "array"
+          items:
+            type: "string"
+        fields:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/CatalogField"
+            type: "object"
+        fieldNames:
+          type: "array"
+          items:
+            type: "string"
+        values:
+          type: "array"
+          items:
+            type: "object"
+        errors:
+          type: "object"
+        object:
+          type: "object"
+      required:
+        - "status"
+        - "historyId"
+        - "historyCount"
+        - "approvedBy"
+
+    CatalogRecordState:
+      type: "object"
+      properties:
+        draftRecord:
+          $ref: "#/components/schemas/CatalogRecord"
+          type: "object"
+        publishedRecord:
+          $ref: "#/components/schemas/CatalogRecord"
+          type: "object"
+
+    DraftState:
+      type: "string"
+      enum:
+        - "Added"
+        - "Changed"
+        - "Deleted"
+
+    DraftSummaryTotals:
+      type: "object"
+      properties:
+        added:
+          type: "number"
+          format: "int32"
+          description: "Count of drafts whose record id has no published baseline"
+        changed:
+          type: "number"
+          format: "int32"
+          description: "Count of edit drafts whose record id has a published baseline"
+        deleted:
+          type: "number"
+          format: "int32"
+          description: "Count of draft deletes whose record id has a published baseline to remove"
+        total:
+          type: "number"
+          format: "int32"
+          description: "added + changed + deleted"
+        draft:
+          type: "number"
+          format: "int32"
+          description: "Count of pending records whose latest version is a Draft (status-based, orthogonal to added/changed)"
+        approved:
+          type: "number"
+          format: "int32"
+          description: "Count of pending records whose latest version is Approved"
+        draftArchive:
+          type: "number"
+          format: "int32"
+          description: "Count of pending records whose latest version is a DraftArchive (pending deletion)"
+      required:
+        - "added"
+        - "changed"
+        - "deleted"
+        - "total"
+        - "draft"
+        - "approved"
+        - "draftArchive"
+
+    DraftRecord:
+      type: "object"
+      properties:
+        recordId:
+          type: "string"
+        draftHistoryId:
+          type: "string"
+          description:
+            - "History id of the latest active draft for this record. Required by"
+            - "catalogRecordPublish / catalogDraftDelete, so including it here lets"
+            - "Review's bulk-publish flow skip the per-row catalogRecordState round-trip."
+        state:
+          $ref: "#/components/schemas/DraftState"
+          type: "object"
+          description:
+            - "Server-computed classification (Added / Changed / Deleted) relative to"
+            - "the published baseline. Distinct from draft.status, which surfaces the"
+            - "physical record status (InProgress / Public) from the underlying iterator."
+        draft:
+          $ref: "#/components/schemas/CatalogRecord"
+          type: "object"
+          description:
+            - "Projection of the draft record, shape controlled by format and field"
+            - "params. For a Deleted state this is the draft delete body."
+      required:
+        - "recordId"
+        - "draftHistoryId"
+        - "state"
+        - "draft"
+
+    DraftSummaryResponse:
+      type: "object"
+      properties:
+        took:
+          type: "number"
+          format: "int32"
+        totals:
+          $ref: "#/components/schemas/DraftSummaryTotals"
+          type: "object"
+          description:
+            - "Totals reflect the full filtered draft set, not just this page, and are"
+            - "not affected by the states filter."
+        records:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/DraftRecord"
+            type: "object"
+          description: "Populated when totalsOnly is false"
+        limit:
+          type: "number"
+          format: "int32"
+        offset:
+          type: "number"
+          format: "int32"
+        count:
+          type: "number"
+          format: "int32"
+          description: "Number of records returned in this page"
+        hasMore:
+          type: "boolean"
+        cursor:
+          type: "string"
+      required:
+        - "took"
+        - "totals"
+
+    AggregateGroupSpec:
+      type: "object"
+      properties:
+        field:
+          type: "string"
+          description:
+            - "Field symbol from the catalog schema. Array fields are unwound by"
+            - "default (one contribution per element). When multiple array fields"
+            - "appear in the same groupBy they iterate by parallel index."
+        name:
+          type: "string"
+          description: "Column name in each AggregateGroup row; defaults to the field symbol"
+      required:
+        - "field"
+
+    AggregateResponse:
+      type: "object"
+      properties:
+        count:
+          type: "number"
+          format: "int32"
+          description: "Number of groups returned (equal to groups.length)"
+        took:
+          type: "number"
+          format: "int32"
+        groups:
+          type: "array"
+          items:
+            type: "object"
+          description:
+            - "Each group is a flat map of column-name to value. The groupBy outputs"
+            - "are keyed by their `name` (defaults to the field symbol). The implicit"
+            - "per-group record count is keyed `count`. Per-field distinct counts are"
+            - "keyed `distinct.<fieldSymbol>` (only present when the request supplied"
+            - "a non-empty countDistinct list). Values are string, int, or null. The"
+            - "reserved keys `count` and any key starting with `distinct.` cannot be"
+            - "used as a groupBy name."
+      required:
+        - "count"
+        - "took"
+        - "groups"
+
+    BulkActionError:
+      type: "object"
+      properties:
+        recordId:
+          type: "string"
+        message:
+          type: "string"
+      required:
+        - "recordId"
+        - "message"
+
+    BulkActionResult:
+      type: "object"
+      properties:
+        requested:
+          type: "number"
+          format: "int32"
+          description: "Records in an applicable status that the action was attempted on"
+        succeeded:
+          type: "number"
+          format: "int32"
+        failed:
+          type: "number"
+          format: "int32"
+        skipped:
+          type: "number"
+          format: "int32"
+          description: "Records that matched the filter but were excluded or not in an applicable status"
+        errors:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/BulkActionError"
+            type: "object"
+          description: "One entry per failed record (empty when failed is 0)"
+        nextCursor:
+          type: "string"
+          description: "Resume cursor for the next chunk (the largest record id processed this call); empty when done"
+        done:
+          type: "boolean"
+          description: "True when no more records matched this chunk (the walk is complete)"
+      required:
+        - "requested"
+        - "succeeded"
+        - "failed"
+        - "skipped"
+        - "errors"
+        - "nextCursor"
+        - "done"
+
+    FieldSortDirection:
+      type: "string"
+      enum:
+        - "Ascending"
+        - "Descending"
+
+    FieldSort:
+      type: "object"
+      properties:
+        field:
+          type: "string"
+          example: "classification"
+        direction:
+          $ref: "#/components/schemas/FieldSortDirection"
+          type: "object"
+      required:
+        - "field"
+        - "direction"
+
+    GenomicQueryMode:
+      type: "string"
+      enum:
+        - "Exact"
+        - "Overlaps"
+        - "Contains"
+        - "Within"
+
+    GenomicRegion:
+      type: "object"
+      properties:
+        chr:
+          type: "string"
+          example: "X"
+        start:
+          type: "number"
+          format: "int32"
+          example: 100
+        stop:
+          type: "number"
+          format: "int32"
+          example: 200
+      required:
+        - "chr"
+        - "start"
+        - "stop"
+
+    GenomicQuery:
+      type: "object"
+      properties:
+        mode:
+          $ref: "#/components/schemas/GenomicQueryMode"
+          type: "object"
+        query:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/GenomicRegion"
+            type: "object"
+      required:
+        - "mode"
+        - "query"
+
+    InputData:
+      type: "object"
+      properties:
+        values:
+          type: "array"
+          items:
+            type: "array"
+            items:
+              type: "object"
+        objects:
+          type: "array"
+          items:
+            type: "object"
+
+    GenePreferenceImportRecord:
+      type: "object"
+      properties:
+        geneId:
+          type: "string"
+          description: "Entrez GeneID; when present it keys the record directly"
+        transcriptId:
+          type: "string"
+          description: "Transcript accession (RefSeq/Ensembl); narrows the locus to this transcript, and on its own resolves the gene"
+        geneName:
+          type: "string"
+          description: "Gene symbol; exact case-insensitive fallback used when no id is given"
+        fields:
+          type: "object"
+          description: "Remaining GenePreferences columns keyed by field symbol (PreferredTranscript, PreferredDisorder, PreferredInheritance, Notes, ...)"
+
+    GeneListImportRecord:
+      type: "object"
+      properties:
+        uuid:
+          type: "string"
+          description: "List primary key; a new one is generated when omitted"
+        name:
+          type: "string"
+        description:
+          type: "string"
+        sourceName:
+          type: "string"
+        sourceUrl:
+          type: "string"
+        geneIds:
+          type: "array"
+          items:
+            type: "string"
+          description: "Member genes given as Entrez GeneIDs"
+        transcriptIds:
+          type: "array"
+          items:
+            type: "string"
+          description: "Member genes given as transcript accessions"
+        geneNames:
+          type: "array"
+          items:
+            type: "string"
+          description: "Member genes given as gene symbols"
+      required:
+        - "name"
+
+    OperatorType:
+      type: "string"
+      enum:
+        - "Or"
+        - "And"
+        - "Not"
+        - "Equals"
+        - "NotEquals"
+        - "LessThan"
+        - "LessThanOrEqual"
+        - "GreaterThan"
+        - "GreaterThanOrEqual"
+        - "StartsWith"
+        - "EndsWith"
+        - "Substring"
+        - "IsNull"
+        - "IsNotNull"
+        - "AlignedArrayMatch"
+
+    ExpressionNode:
+      type: "object"
+      properties:
+        children:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/ExpressionNode"
+            type: "object"
+          description: "Used by And, Or, Not, and AlignedArrayMatch."
+        field:
+          type: "string"
+          example: "classification"
+        op:
+          $ref: "#/components/schemas/OperatorType"
+          type: "object"
+          description: "And, Or, Not, Equals, NotEquals, LessThan, LessThanOrEqual, GreaterThan, GreaterThanOrEqual, StartsWith, EndsWith, Substring, IsNull, IsNotNull, AlignedArrayMatch"
+        value:
+          type: "string"
+          example: "Pathogenic"
+      required:
+        - "op"

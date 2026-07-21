@@ -1,0 +1,207 @@
+name: Create Workspace Catalogs
+description: Create default workspace catalogs
+auto_generate_session_for_account: "{user}"
+
+agent_requirements:
+  cpu_cores: 0
+  memory_gb: 0
+
+parameters:
+
+  - name: sample
+    label: Create Sample Catalog
+    help: Create the default workspace sample catalog with name, BAM Path, and VCF Path
+    type: boolean
+    value: 'true'
+    group: 'Sample Catalog'
+
+  - name: germline_sample_fields
+    label: Germline Sample Fields to Add
+    help: Add the additional fields to the sample catalog
+    type: enum
+    list: true
+    optional: true
+    choices:
+      - Affected?
+      - Father
+      - Mother
+      - Phenotypes
+      - Disorders
+      - Gene List
+      - Panels
+      - Mother Patient Name
+      - Mother DOB
+      - Father Patient Name
+      - Father DOB
+      - Status
+      - Partner
+    value: 'Affected?,Father,Mother,Phenotypes,Disorders'
+    group: 'Sample Catalog'
+
+  - name: somatic_sample_fields
+    label: Somatic Sample Fields to Add
+    help: Add the additional fields to the sample catalog
+    type: enum
+    list: true
+    optional: true
+    choices:
+      - Tumor
+      - Tumor Type
+      - Normal Sample
+      - Tumor Purity
+      - Specimen Site
+      - Age of Diagnosis
+    value: 'Tumor,Tumor Type,Normal Sample,Tumor Purity,Specimen Site'
+    group: 'Sample Catalog'
+
+  - name: pgx_sample_fields
+    label: PGx Sample Fields to Add
+    help: Add the additional fields specific to PGx algorithm and report
+    type: enum
+    list: true
+    optional: true
+    choices:
+      - PGx Genotypes
+      - Alternative CYP2D6 Genotypes
+      - Alleles Tested
+      - Current Patient Medications
+    group: 'Sample Catalog'
+
+  - name: report_fields
+    label: Report Fields to Add
+    help: Add the additional fields for reports
+    type: enum
+    list: true
+    optional: true
+    choices:
+      - Patient Name
+      - Date of Birth
+      - Sex
+      - Accession
+      - MRN
+      - Patient ID      
+      - Ethnicity
+      - Age of Diagnosis
+      - Ordering Physician
+      - Facility
+      - Copies To
+      - Contact Person
+      - Sample Type
+      - Collection Method
+      - Indication
+      - Sample Notes
+      - Patient Additional
+      - Date Ordered
+      - Date Collected
+      - Date Received
+    value: 'Sex'
+    group: 'Sample Catalog'
+
+  - name: gene_list_catalog
+    label: Create Gene List Catalog
+    help: Create the Gene List Catalog
+    type: boolean
+    value: 'true'
+    group: 'Interpretation Configuration Catalogs'
+
+  - name: gene_preferences_catalog
+    label: Create Gene Preferences Catalog
+    help: Create the Gene Preferences Catalog
+    type: boolean
+    value: 'true'
+    group: 'Interpretation Configuration Catalogs'
+
+  - name: vsclinical_acmg_catalogs
+    label: ACMG Catalogs
+    help: Create the VSClinical ACMG catalogs
+    type: boolean
+    value: 'false'
+    group: 'VSClinical Catalogs'
+
+  - name: vsclinical_amp_catalogs
+    label: AMP Catalogs
+    help: Create the VSClinical AMP catalogs
+    type: boolean
+    value: 'false'
+    group: 'VSClinical Catalogs'
+
+  - name: sample_catalog_id
+    label: Sample Catalog ID
+    help: The ID of the sample catalog to create
+    type: string
+    value: 'SampleCatalog'
+    group: 'Sample Catalog Advanced'
+
+  - name: sample_catalog_name
+    label: Sample Catalog Name
+    help: The name of the sample catalog to create
+    type: string
+    value: 'Sample Catalog'
+    group: 'Sample Catalog Advanced'
+
+  - name: sample_catalog_description
+    label: Sample Catalog Description
+    help: The description of the sample catalog to create
+    type: string
+    value: 'Default workspace sample catalog'
+    group: 'Sample Catalog Advanced'
+    
+    
+    
+    
+
+steps:
+  - name: create_catalogs
+    description: Create workspace catalogs
+    type: cmd
+    args:
+      - |-
+        set -euo pipefail
+        
+        # Combine all fields into a single comma-separated list
+        COMBINED_FIELDS=""
+        
+        # Add germline fields if they exist
+        if [ -n "${germline_sample_fields:-}" ]; then
+            COMBINED_FIELDS="${germline_sample_fields}"
+        fi
+        
+        # Add somatic fields if they exist
+        if [ -n "${somatic_sample_fields:-}" ]; then
+            if [ -n "${COMBINED_FIELDS}" ]; then
+                COMBINED_FIELDS="${COMBINED_FIELDS},${somatic_sample_fields}"
+            else
+                COMBINED_FIELDS="${somatic_sample_fields}"
+            fi
+        fi
+        
+        # Add report fields if they exist
+        if [ -n "${report_fields:-}" ]; then
+            if [ -n "${COMBINED_FIELDS}" ]; then
+                COMBINED_FIELDS="${COMBINED_FIELDS},${report_fields}"
+            else
+                COMBINED_FIELDS="${report_fields}"
+            fi
+        fi
+        
+        # Add PGx fields if they exist
+        if [ -n "${pgx_sample_fields:-}" ]; then
+            if [ -n "${COMBINED_FIELDS}" ]; then
+                COMBINED_FIELDS="${COMBINED_FIELDS},${pgx_sample_fields}"
+            else
+                COMBINED_FIELDS="${pgx_sample_fields}"
+            fi
+        fi
+        
+        # Call the catalog task script with appropriate arguments
+        python3 "$TASK_DIR/catalog_task.py" \
+            --create-sample="${sample}" \
+            --create-acmg="${vsclinical_acmg_catalogs}" \
+            --create-amp="${vsclinical_amp_catalogs}" \
+            --create-gene-list="${gene_list_catalog}" \
+            --create-gene-preferences="${gene_preferences_catalog}" \
+            --add-sample-fields="${COMBINED_FIELDS}" \
+            --sample-catalog-id="${sample_catalog_id}" \
+            --sample-catalog-name="${sample_catalog_name}" \
+            --sample-catalog-description="${sample_catalog_description}"
+

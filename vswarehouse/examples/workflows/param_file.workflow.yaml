@@ -1,0 +1,13 @@
+name: Parameter File Test
+description: Tests parameter_file functionality with retry capabilities to verify loading parameters from an external file
+stages:
+  - name: B
+    description: Stage with parameter file processing
+    task_path: test.task.yaml
+    depends_on: []
+    retry_count: 3
+    parameter_file:
+      path:
+        file: ''
+        base_path:
+          type: 'directory'

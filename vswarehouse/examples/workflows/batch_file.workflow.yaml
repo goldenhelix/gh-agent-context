@@ -1,0 +1,13 @@
+name: Batch File Parameter Test
+description: Tests batch_file_parameter functionality with retry capabilities to verify batch processing of multiple parameter sets from a file
+stages:
+  - name: B
+    description: Stage with batch file parameter processing
+    task_path: test.task.yaml
+    depends_on: []
+    retry_count: 3
+    batch_file_parameter:
+      path:
+        file: ''
+        base_path:
+          type: 'directory'

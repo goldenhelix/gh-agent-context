@@ -1,0 +1,94 @@
+name: Test All Inputs Example
+description: Test all inputs
+
+agent_requirements:
+  cpu_cores: 1
+  memory_gb: 0.1
+
+parameters:
+  - name: String Input
+    label: A string to test for A, C, G, or Ts
+    type: string
+    value: ACGT
+
+  - name: String Array Input
+    label: A string array to test for A, C, G, or Ts
+    type: string
+    list: true
+
+  - name: Number Input
+    label: A number to test for 1, 2, 3, or 4
+    type: integer
+    value: '1'
+
+  - name: Float Input
+    label: A float input
+    type: float
+    value: '5.2'
+
+  - name: Boolean Input
+    label: A boolean to test for true or false
+    type: boolean
+    value: 'true'
+
+  - name: Enum Input
+    label: An enum to test for one, two, three, or four
+    type: enum
+    value: one
+    choices:
+      - one
+      - two
+      - three
+      - four
+
+  - name: Enum List Input
+    label: An enum to test for one, two, three, or four
+    type: enum
+    value: one
+    choices:
+      - one
+      - two
+      - three
+      - four
+    list: true
+
+  - name: Single-File Input
+    label: A single file input
+    type: file
+    pattern_match:
+      - '*.png'
+      - '*.csv'
+
+  - name: Multi-File Input
+    label: A multi-file input
+    type: file
+    list: true
+    pattern_match:
+      - '*.pdf'
+      - '*.docx'
+
+  - name: Directory Input
+    label: A directory input
+    type: directory
+
+  - name: Disabled Input
+    label: A disabled input
+    type: string
+    value: disabled
+    editable: false
+
+  - name: Optional Input
+    label: An optional input
+    type: string
+    optional: true
+
+steps:
+  - name: testAllInputs
+    description: Test each character
+    type: cmd
+    command: bash
+    args:
+      - |-
+        echo "Running testAllInputs"
+        sleep 0.1
+        env

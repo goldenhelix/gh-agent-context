@@ -1,0 +1,40 @@
+name: Glob Fan-out Example
+description: >-
+  Stage 1 generates a set of files; Stage 2 fans out over them (one task instance per file).
+  Verified end-to-end on VS Warehouse. See vswarehouse/reference/task-workflow-authoring.md
+  (Fan-out) for the two gotchas this example encodes.
+
+stages:
+  # Stage 1: produce N files into a workspace location and emit that directory downstream.
+  - name: Generate
+    task_path: ./generate_files.task.yaml
+    task_parameters:
+      - name: output_dir
+        label: Output Directory
+        type: directory
+        value: Documents/fanout_demo/generated
+      - name: count
+        label: How many files
+        type: integer
+        value: '4'
+
+  # Stage 2: fan out — one instance of process_file per *.txt the Generate stage created.
+  - name: Process
+    task_path: ./process_file.task.yaml
+    depends_on: [ Generate ]
+    glob_parameter:
+      path:
+        type: stage
+        stage: Generate
+        # GOTCHA 1: inside glob_parameter.path this key is `parameter` /
+        # `parameter_expression` — NOT `stage_parameter` (which silently yields 0 instances).
+        # GOTCHA 2: `gen_dir` is emitted by Generate as a WORKSPACE-RELATIVE path
+        # (absolute /w/<ws>/... bases fail to glob).
+        parameter_expression: '${gen_dir}'
+      glob_ex: '*.txt'
+      continue_if_no_match: true
+      output_parameters:
+        - task_parameter_name: input_file      # ${0} = full matched path
+          expression: '${0}'
+        - task_parameter_name: sample_name      # ${basename} = filename without extension
+          expression: '${basename}'

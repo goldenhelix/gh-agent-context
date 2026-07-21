@@ -1,0 +1,33 @@
+# example_workflow.yaml
+name: Sample Data Analysis Pipeline
+description: Download and analyze sample data
+stages:
+  - name: Create Data
+    description: Generate sample dataset
+    task_path: create_data_set.task.yaml
+    depends_on: []
+    task_parameters:
+      - name: output_dir
+        label: Output Directory
+        type: directory
+        value: sample_data
+
+  - name: Analyze Data
+    description: Analyze the data
+    task_path: analyze_data_set.task.yaml
+    depends_on:
+      - Create Data
+
+    task_parameters:
+      - name: input_folder
+        label: Input CSV Folder
+        type: stage
+        stage: Create Data
+        stage_parameter: output_dir
+        
+      - name: output_dir
+        label: Output Folder
+        type: stage
+        stage: Create Data
+        stage_parameter: output_dir
+

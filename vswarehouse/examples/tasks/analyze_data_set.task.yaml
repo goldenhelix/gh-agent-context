@@ -1,0 +1,87 @@
+# analyze.task.yaml
+name: Analyze Data
+description: Perform basic statistical analysis
+agent_requirements:
+  cpu_cores: 1
+  memory_gb: 1
+
+parameters:
+  - name: input_folder
+    label: Input CSV Folder
+    type: directory
+
+  - name: output_dir
+    label: Output Directory
+    type: directory
+
+
+steps:
+  - name: analyze_data
+    type: cmd
+    description: Analyze the data using Python
+    args:
+      - |-
+        python3 -c '
+        import csv
+        from pathlib import Path
+        from collections import defaultdict
+        import os
+        from statistics import mean
+
+        # Safely get input folder and create output directory
+        try:
+            input_folder = Path(os.environ["input_folder"])
+            output_dir = Path(os.environ["output_dir"])
+            output_dir.mkdir(exist_ok=True)
+        except KeyError:
+            raise EnvironmentError("input_folder environment variable not set")
+
+        # Read the CSV
+        data = []
+        try:
+            with open(input_folder / "sample_data.csv") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    try:
+                        data.append({
+                            "id": int(row["id"]),
+                            "value": float(row["value"]),
+                            "category": row["category"]
+                        })
+                    except (ValueError, KeyError) as e:
+                        print(f"Error processing row: {row}. Error: {e}")
+                        continue
+
+        except FileNotFoundError:
+            raise FileNotFoundError("sample_data.csv not found in input folder")
+
+        # Calculate statistics
+        by_category = defaultdict(list)
+        for row in data:
+            by_category[row["category"]].append(row["value"])
+
+        # Calculate overall average
+        overall_avg = mean([row["value"] for row in data]) if data else 0
+
+        category_stats = {}
+        for cat, values in by_category.items():
+            category_stats[cat] = {
+                "count": len(values),
+                "avg": mean(values)
+            }
+
+        # Write report
+        try:
+            with open(output_dir / "stats.txt", "w") as f:
+                f.write("Data Analysis Report\n")
+                f.write("==================\n\n")
+                f.write(f"Total Records: {len(data)}\n")
+                f.write(f"Average Value: {overall_avg:.2f}\n\n")
+                f.write("Statistics by Category:\n")
+                for cat, stats in category_stats.items():
+                    f.write("\nCategory {}:\n".format(cat))
+                    f.write("  Count: {}\n".format(stats["count"]))
+                    f.write("  Average: {:.2f}\n".format(stats["avg"]))
+        except IOError as e:
+            print(f"Error writing report: {e}")
+        '

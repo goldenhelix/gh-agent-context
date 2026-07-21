@@ -1,0 +1,1214 @@
+openapi: '3.0.2'
+info:
+  title: File API
+  version: '1.0.0'
+  description: 'Provides endpoints for managing workspace files, including location creation, updates, file operations (copy, move, zip, unzip, rename), uploads, downloads, and URL-based file handling.'
+
+externalDocs:
+  url: '/docs/api-docs'
+  description: API Documentation
+
+servers:
+  - url: '/w/my_workspace/api/files'
+
+
+
+
+paths:
+  /:
+    get:
+      operationId: "fileLocations"
+      summary: "List available file locations"
+      description: "Lists the file locations (top-level roots) available in this workspace, each with its id, access mode, the current user's permissions, and free/total space. A location id is the first segment of any workspace path (the 'Documents' in 'Documents/report.pdf') and is passed as locationId to fileList, fileStat, and file operations. Cheap read; call this first to discover valid locationId values."
+      x-agent-expose: "promoted"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:list"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/FileLocation"
+                  type: "object"
+  /createLocation:
+    post:
+      operationId: "createLocation"
+      summary: "Create a new file location"
+      description: "Registers a new file location in the workspace. Administrative operation requiring file:manage permission."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:manage"
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "location"
+              properties:
+                location:
+                  $ref: "#/components/schemas/FileLocation"
+                  type: "object"
+                  description: "New location state"
+                createFolder:
+                  type: "boolean"
+                  description: "Create the new location folder in the workspace (not needed for external mounts)"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "boolean"
+  /updateLocation:
+    post:
+      operationId: "updateLocation"
+      summary: "Update a file location's configuration"
+      description: "Updates the settings of an existing file location. Administrative operation requiring file:manage permission."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:manage"
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "location"
+              properties:
+                location:
+                  $ref: "#/components/schemas/FileLocation"
+                  type: "object"
+                  description: "Updated location state"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "boolean"
+  /removeLocation/{locationId}:
+    delete:
+      operationId: "removeLocation"
+      summary: "Remove a file location (must be empty)"
+      description: "Removes an empty file location from the workspace. Administrative operation requiring file:manage permission; a location that still contains files is not removed."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:manage"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "boolean"
+  /_testTypes:
+    get:
+      operationId: "_testTypes"
+      summary: "Does nothing but returns complex object with various value type to test API clients. Get params are echoed back to response to test round-tripping of test values."
+      description: "Does nothing but returns complex object with various value type to test API clients. Get params are echoed back to response to test round-tripping of test values."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "string"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+
+        - name: "stringArray"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "string"
+
+        - name: "categorical"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SortAndOrder"
+
+        - name: "categoricalArray"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              $ref: "#/components/schemas/SortAndOrder"
+              type: "object"
+
+        - name: "boolean"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+
+        - name: "booleanArray"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "boolean"
+
+        - name: "number"
+          in: "query"
+          required: false
+          schema:
+            type: "number"
+            format: "double"
+
+        - name: "numberArray"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "number"
+              format: "double"
+
+        - name: "integer"
+          in: "query"
+          required: false
+          schema:
+            type: "number"
+            format: "int32"
+
+        - name: "integerArray"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "number"
+              format: "int32"
+
+        - name: "location"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileLocation"
+
+        - name: "locationArray"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              $ref: "#/components/schemas/FileLocation"
+              type: "object"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestTypes"
+                type: "object"
+  /{locationId}:
+    get:
+      operationId: "fileList"
+      summary: "List files and folders in a location"
+      description: "Lists the files and folders under a workspace path. Always split a user's path at the FIRST '/': the first segment is the locationId, the rest is the path. Examples: 'Documents/reports' -> locationId 'Documents', path 'reports'; 'Documents' or 'Documents/' -> locationId 'Documents', path '' (the location root); '' or '/' -> use fileLocations to list the locations themselves. Supports name filters, type/sort options, paging, and recursion. Cheap read; use fileLocations first to find valid locationId values, or fileStat for a single entry."
+      x-agent-expose: "promoted"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:list"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "path"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "reports"
+            description: "Location-relative path of the subfolder to list, using '/' between nested folders (e.g. 'reports/2026'). Empty string or omitted means the location root. Do NOT include the locationId in this value."
+          description: "Location-relative path of the subfolder to list, using '/' between nested folders (e.g. 'reports/2026'). Empty string or omitted means the location root. Do NOT include the locationId in this value."
+          example: "reports"
+
+        - name: "filter"
+          in: "query"
+          required: false
+          schema:
+            type: "array"
+            items:
+              type: "string"
+            description: "Glob name filters (e.g. '*.vcf.gz'); an entry is included if it matches any pattern."
+          description: "Glob name filters (e.g. '*.vcf.gz'); an entry is included if it matches any pattern."
+
+        - name: "type"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileType"
+          description: "Which entries to include: filesOnly, dirsOnly, or allEntries (default)."
+
+        - name: "sort"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SortAndOrder"
+          description: "Sort order, e.g. nameAsc, dateDesc, or sizeDesc. Defaults to folders first, then by name."
+
+        - name: "limit"
+          in: "query"
+          required: false
+          schema:
+            type: "number"
+            format: "int32"
+            example: 100
+            description: "Number of items to return per page (capped at 10000)."
+          description: "Number of items to return per page (capped at 10000)."
+          example: 100
+
+        - name: "offset"
+          in: "query"
+          required: false
+          schema:
+            type: "number"
+            format: "int32"
+            example: 0
+            description: "Zero-based index of the first item to return, for paging"
+          description: "Zero-based index of the first item to return, for paging"
+          example: 0
+
+        - name: "recursive"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            example: false
+            description: "Recursively list files in sub-folders"
+          description: "Recursively list files in sub-folders"
+          example: false
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileResponse"
+                type: "object"
+    delete:
+      operationId: "remove"
+      summary: "Delete a file or folder"
+      description: "Permanently deletes a file or folder within a location. Destructive; requires file:write. Non-empty folders require recursive=true."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:write"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "uri"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "reports/old.vcf.gz"
+            description: "Location-relative path of the file or folder to delete"
+          description: "Location-relative path of the file or folder to delete"
+          example: "reports/old.vcf.gz"
+
+        - name: "recursive"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            example: false
+            description: "Recursive delete paths. Required for non-empty folders"
+          description: "Recursive delete paths. Required for non-empty folders"
+          example: false
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /{locationId}/fileStat:
+    get:
+      operationId: "fileStat"
+      summary: "Get metadata for a single file or folder"
+      description: "Returns a FileEntry (name, size, timestamps, isDir) for one file or folder in a location. Cheap read; use this to check whether a specific path exists or inspect its attributes rather than listing a whole folder with fileList."
+      x-agent-expose: "promoted"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:list"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "uri"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "reports/variant_calls.vcf.gz"
+            description: "Location-relative path of the file or folder"
+          description: "Location-relative path of the file or folder"
+          example: "reports/variant_calls.vcf.gz"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileEntry"
+                type: "object"
+  /{locationId}/copy:
+    post:
+      operationId: "copy"
+      summary: "Copy a file or folder"
+      description: "Copies a file or folder to another path, optionally into a different location. Mutates the workspace; requires file:write (and write permission in destLocation when set)."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:write"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "source"
+                - "destination"
+              properties:
+                source:
+                  type: "string"
+                  example: "reports/variant_calls.vcf.gz"
+                  description: "Location-relative path of the file or folder to be copied"
+                destination:
+                  type: "string"
+                  example: "archive/variant_calls.vcf.gz"
+                  description: "Location-relative path of the destination file or folder"
+                destLocation:
+                  type: "string"
+                  example: "Automation"
+                  description: "Destination location id when copying into another location; requires write permission there"
+                overwrite:
+                  type: "boolean"
+                  example: false
+                  description: "Overwrite the destination if it already exists"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /{locationId}/move:
+    post:
+      operationId: "move"
+      summary: "Move or rename a file or folder"
+      description: "Moves a file or folder to another path, optionally into a different location. Mutates the workspace; requires file:write (and write permission in destLocation when set)."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:write"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "source"
+                - "destination"
+              properties:
+                source:
+                  type: "string"
+                  example: "reports/variant_calls.vcf.gz"
+                  description: "Location-relative path of the file or folder to be moved"
+                destination:
+                  type: "string"
+                  example: "archive/variant_calls.vcf.gz"
+                  description: "Location-relative path of the destination file or folder"
+                destLocation:
+                  type: "string"
+                  example: "Automation"
+                  description: "Destination location id when moving into another location; requires write permission there"
+                overwrite:
+                  type: "boolean"
+                  example: false
+                  description: "Overwrite the destination if it already exists"
+                copyAndDelete:
+                  type: "boolean"
+                  example: false
+                  description: "Copy then delete the source instead of an in-place rename (needed across filesystems)"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /{locationId}/zip:
+    post:
+      operationId: "zip"
+      summary: "Compress files or folders into a zip"
+      description: "Creates a zip archive from one or more files/folders, optionally writing it into another location. Mutates the workspace; requires file:write."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:write"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "sourceFiles"
+                - "destination"
+              properties:
+                sourceFiles:
+                  type: "array"
+                  items:
+                    type: "string"
+                  description: "Location-relative paths of the files and folders to include"
+                destination:
+                  type: "string"
+                  example: "archive/results.zip"
+                  description: "Location-relative path of the destination zip file"
+                destLocation:
+                  type: "string"
+                  example: "Automation"
+                  description: "Destination location id when writing into another location; requires write permission there"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /{locationId}/unzip:
+    post:
+      operationId: "unzip"
+      summary: "Extract a zip archive"
+      description: "Extracts a zip file into a destination folder, optionally in another location. Mutates the workspace; requires file:write."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:write"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "zipFile"
+                - "destination"
+              properties:
+                zipFile:
+                  type: "string"
+                  example: "archive/results.zip"
+                  description: "Location-relative path of the zip file to extract"
+                destination:
+                  type: "string"
+                  example: "archive/results"
+                  description: "Location-relative destination folder for the extracted contents"
+                destLocation:
+                  type: "string"
+                  example: "Automation"
+                  description: "Destination location id when extracting into another location; requires write permission there"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /{locationId}/rename:
+    post:
+      operationId: "rename"
+      summary: "Rename a file within its folder"
+      description: "Renames a file or folder in place within a location. Mutates the workspace; requires file:write."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:write"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "oldUri"
+                - "newUri"
+              properties:
+                oldUri:
+                  type: "string"
+                  example: "reports/draft.vcf.gz"
+                  description: "Location-relative path of the file to be renamed"
+                newUri:
+                  type: "string"
+                  example: "reports/final.vcf.gz"
+                  description: "New name (or location-relative path) for the file"
+                overwrite:
+                  type: "boolean"
+                  example: false
+                  description: "Overwrite the destination if it already exists"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /{locationId}/mkdir:
+    post:
+      operationId: "createDirectory"
+      summary: "Create a new folder"
+      description: "Creates a new folder at the given location-relative path. Mutates the workspace; requires file:write."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:write"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "uri"
+              properties:
+                uri:
+                  type: "string"
+                  example: "reports/2024"
+                  description: "Location-relative path of the new folder"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /{locationId}/download:
+    post:
+      operationId: "fileDownload"
+      summary: "Request a download URL for a file"
+      description: "Returns a short-lived, tokenized URL for downloading a file's contents. Does not stream the bytes itself; GET the returned downloadUrl to fetch them."
+      x-agent-permission: "file:list"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "uri"
+              properties:
+                uri:
+                  type: "string"
+                  example: "reports/variant_calls.vcf.gz"
+                  description: "Location-relative path of the file to download"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DownloadResponse"
+                type: "object"
+  /{locationId}/upload:
+    post:
+      operationId: "fileUpload"
+      summary: "Initiate a file upload"
+      description: "Starts a chunked upload session and returns an upload token plus the max chunk size; send bytes with fileUploadChunk. Mutates the workspace; requires file:write."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:write"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "uri"
+              properties:
+                uri:
+                  type: "string"
+                  example: "reports/variant_calls.vcf.gz"
+                  description: "Location-relative path where the uploaded file will be written"
+                overwrite:
+                  type: "boolean"
+                  example: false
+                  description: "Overwrite the destination if it already exists"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResponse"
+                type: "object"
+  /{locationId}/upload/{token}:
+    delete:
+      operationId: "cancelUpload"
+      summary: "Cancel an in-progress upload"
+      description: "Cancels an upload session started by fileUpload and discards any partially uploaded bytes. Requires file:write."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:write"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "token"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "uri"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "reports/variant_calls.vcf.gz"
+            description: "Location-relative path of the file being uploaded"
+          description: "Location-relative path of the file being uploaded"
+          example: "reports/variant_calls.vcf.gz"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+    post:
+      operationId: "fileUploadChunk"
+      summary: "Upload a file chunk"
+      description: "Uploads the next chunk of bytes for an in-progress upload session; the request body carries the raw chunk. Mutates the workspace; requires file:write."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:write"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "token"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "uri"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "reports/variant_calls.vcf.gz"
+            description: "Location-relative path of the file being uploaded"
+          description: "Location-relative path of the file being uploaded"
+          example: "reports/variant_calls.vcf.gz"
+
+        - name: "bytesSent"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: 8388608
+            description: "Number of bytes already uploaded before this chunk (a string to support large files)"
+          description: "Number of bytes already uploaded before this chunk (a string to support large files)"
+          example: 8388608
+
+        - name: "isLastChunk"
+          in: "query"
+          required: true
+          schema:
+            type: "boolean"
+            example: false
+            description: "Indicates whether this is the last chunk of the file"
+          description: "Indicates whether this is the last chunk of the file"
+          example: false
+
+      requestBody:
+        required: "true"
+        content:
+          application/octet-stream: {}
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /{locationId}/url/check:
+    post:
+      operationId: "urlUploadCheck"
+      summary: "Check a remote URL before importing"
+      description: "Performs an HTTP HEAD request against a URL and returns its size, MIME type, and inferred file name, so a URL import can be validated before it starts. Does not download the file."
+      x-agent-permission: "file:write"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "url"
+              properties:
+                url:
+                  type: "string"
+                  example: "https://example.com/variant_calls.vcf.gz"
+                  description: "The URL to check"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UrlCheckResponse"
+                type: "object"
+  /{locationId}/url/upload:
+    post:
+      operationId: "urlUpload"
+      summary: "Import a file from a URL"
+      description: "Starts a server-side download that fetches a remote URL directly into a location and returns a process id; poll /ps/{processId} for status. Mutates the workspace; requires file:write."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:write"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "url"
+                - "uri"
+              properties:
+                url:
+                  type: "string"
+                  example: "https://example.com/variant_calls.vcf.gz"
+                  description: "The URL to download the file from"
+                uri:
+                  type: "string"
+                  example: "reports/variant_calls.vcf.gz"
+                  description: "Location-relative path where the downloaded file will be written"
+                overwrite:
+                  type: "boolean"
+                  example: false
+                  description: "Overwrite the destination if it already exists"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+components:
+  schemas:
+    UploadResponse:
+      type: "object"
+      properties:
+        uri:
+          type: "string"
+          description: "Location-relative path of the file being uploaded."
+          example: "reports/variant_calls.vcf.gz"
+        token:
+          type: "string"
+          description: "Random base32 token identifying this upload session; pass it to fileUploadChunk and cancelUpload."
+          example: "K7QF2M9XZ4TB8N6P"
+        maxChunkSize:
+          type: "number"
+          format: "int32"
+          description: "Maximum number of bytes the server accepts per fileUploadChunk call."
+          example: 8388608
+      required:
+        - "uri"
+        - "token"
+        - "maxChunkSize"
+
+    DownloadResponse:
+      type: "object"
+      properties:
+        downloadUrl:
+          type: "string"
+          description: "URL to GET the file's bytes (the workspace's /api/download/<locationId>/<uri> endpoint); the one-time token is included as a query parameter."
+          example: "/api/download/Documents/reports/variant_calls.vcf.gz?token=K7QF2M9XZ4TB8N6P"
+        expires:
+          type: "number"
+          format: "int32"
+          description: "Unix epoch seconds after which the download URL stops working."
+          example: 1719187200
+      required:
+        - "downloadUrl"
+        - "expires"
+
+    UrlCheckResponse:
+      type: "object"
+      properties:
+        url:
+          type: "string"
+          description: "The URL that was checked (after following any redirects)."
+          example: "https://example.com/variant_calls.vcf.gz"
+        size:
+          type: "string"
+          description: "File size in bytes if the server reported it, otherwise null."
+          example: 139131931
+        mimeType:
+          type: "string"
+          description: "MIME type from the response Content-Type header, if available."
+          example: "application/gzip"
+        fileName:
+          type: "string"
+          description: "File name inferred from the URL or Content-Disposition header."
+          example: "variant_calls.vcf.gz"
+      required:
+        - "url"
+        - "fileName"
+
+    FileEntry:
+      type: "object"
+      properties:
+        name:
+          type: "string"
+          description: "File or folder name (the last path segment)."
+          example: "variant_calls.vcf.gz"
+        url:
+          type: "string"
+          description: "Workspace path to this entry as /{locationId}/{relativePath}; the first segment is the location id."
+          example: "/Documents/reports/variant_calls.vcf.gz"
+        isDir:
+          type: "boolean"
+          description: "True if this entry is a folder."
+        isSymLink:
+          type: "boolean"
+          description: "True if this entry is a symbolic link."
+        size:
+          type: "string"
+          description: "File size in bytes as a string; null for folders."
+          example: 139131931
+        created:
+          type: "string"
+          description: "Creation time in ISO 8601 UTC."
+          example: "2019-06-24T00:00:00.000Z"
+        modified:
+          type: "string"
+          description: "Last-modified time in ISO 8601 UTC."
+          example: "2019-06-24T00:00:00.000Z"
+      required:
+        - "name"
+        - "url"
+        - "isDir"
+        - "isSymLink"
+        - "created"
+        - "modified"
+
+    FileResponse:
+      type: "object"
+      properties:
+        total:
+          type: "number"
+          format: "int32"
+          description: "Total number of entries matching the query across all pages."
+          example: 42
+        limit:
+          type: "number"
+          format: "int32"
+          description: "Maximum number of entries returned in this response (the limit parameter)."
+          example: 100
+        offset:
+          type: "number"
+          format: "int32"
+          description: "Zero-based index of the first entry in this response (the offset parameter)."
+          example: 0
+        count:
+          type: "number"
+          format: "int32"
+          description: "Number of entries actually returned in this response."
+          example: 42
+        hasMore:
+          type: "boolean"
+          description: "True when more entries match beyond this page; fetch the next page with offset+limit."
+        took:
+          type: "number"
+          format: "int32"
+          description: "Time taken to execute the listing, in milliseconds."
+          example: 5
+        warnings:
+          type: "array"
+          items:
+            type: "string"
+          description: "Any warnings or notices about the listing results."
+        entries:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/FileEntry"
+            type: "object"
+          description: "The files and folders for this page of results."
+      required:
+        - "total"
+        - "limit"
+        - "offset"
+        - "count"
+        - "hasMore"
+        - "took"
+        - "entries"
+
+    LocationMode:
+      type: "string"
+      enum:
+        - "readOnly"
+        - "noAppend"
+        - "readWrite"
+
+    FileLocation:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          description: "Location id; the first segment of a workspace path (the 'Documents' in 'Documents/report.pdf'). Passed as the locationId path parameter to file operations."
+          example: "Documents"
+        name:
+          type: "string"
+          description: "Human-readable name of the location shown in the UI."
+          example: "Documents"
+        description:
+          type: "string"
+          description: "Human-readable description of what the location is for."
+          example: "Shared workspace documents"
+        icon:
+          type: "string"
+          description: "Icon identifier used to display this location in the UI."
+        mode:
+          $ref: "#/components/schemas/LocationMode"
+          type: "object"
+          description: "Access mode for the location: readOnly, noAppend, or readWrite."
+        locked:
+          type: "boolean"
+          description: "Whether the location is locked (cannot be removed or renamed)."
+        readPermission:
+          type: "boolean"
+          description: "Whether the current user may read from this location."
+        writePermission:
+          type: "boolean"
+          description: "Whether the current user may write to this location."
+        managePermission:
+          type: "boolean"
+          description: "Whether the current user may manage (configure) this location."
+        unrestrictedGroups:
+          type: "array"
+          items:
+            type: "string"
+          description: "Group ids granted unrestricted access to this location."
+        readGroups:
+          type: "array"
+          items:
+            type: "string"
+          description: "Group ids granted read access to this location."
+        writeGroups:
+          type: "array"
+          items:
+            type: "string"
+          description: "Group ids granted write access to this location."
+        bytesAvailable:
+          type: "number"
+          format: "double"
+          description: "Free space in bytes on the storage backing this location."
+          example: 536870912000
+        bytesTotal:
+          type: "number"
+          format: "double"
+          description: "Total capacity in bytes of the storage backing this location."
+          example: 1099511627776
+      required:
+        - "id"
+        - "name"
+        - "description"
+        - "icon"
+        - "mode"
+        - "locked"
+        - "unrestrictedGroups"
+        - "readGroups"
+        - "writeGroups"
+
+    SortAndOrder:
+      type: "string"
+      enum:
+        - "nameAsc"
+        - "nameDesc"
+        - "dateAsc"
+        - "dateDesc"
+        - "typeAsc"
+        - "typeDesc"
+        - "sizeAsc"
+        - "sizeDesc"
+
+    FileType:
+      type: "string"
+      enum:
+        - "filesOnly"
+        - "dirsOnly"
+        - "allEntries"
+
+    TestTypes:
+      type: "object"
+      properties:
+        currentDateTime:
+          type: "string"
+        emptyString:
+          type: "string"
+        maxInt:
+          type: "number"
+          format: "int32"
+        minInt:
+          type: "number"
+          format: "int32"
+        maxDouble:
+          type: "number"
+          format: "double"
+        minDouble:
+          type: "number"
+          format: "double"
+        string:
+          type: "string"
+        stringArray:
+          type: "array"
+          items:
+            type: "string"
+        categorical:
+          $ref: "#/components/schemas/SortAndOrder"
+          type: "object"
+        categoricalArray:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/SortAndOrder"
+            type: "object"
+        boolean:
+          type: "boolean"
+        booleanArray:
+          type: "array"
+          items:
+            type: "boolean"
+        number:
+          type: "number"
+          format: "double"
+        numberArray:
+          type: "array"
+          items:
+            type: "number"
+            format: "double"
+        integer:
+          type: "number"
+          format: "int32"
+        integerArray:
+          type: "array"
+          items:
+            type: "number"
+            format: "int32"
+        location:
+          $ref: "#/components/schemas/FileLocation"
+          type: "object"
+        locationArray:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/FileLocation"
+            type: "object"
+      required:
+        - "currentDateTime"
+        - "emptyString"
+        - "maxInt"
+        - "minInt"
+        - "maxDouble"
+        - "minDouble"

@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "jsonSchema.json",
+  "title": "Task Schema",
+  "description": "A task schema",
+  "type": "object",
+  "required": [
+    "name",
+    "parameters",
+    "steps",
+    "agent_requirements"
+  ],
+  "properties": {
+    "name": {
+      "description": "The name of the task",
+      "type": "string"
+    },
+    "description": {
+      "description": "The description of the task (supports Markdown)",
+      "type": "string"
+    },
+    "env_file": {
+      "description": "The environment variable file for the task",
+      "type": "string"
+    },
+    "auto_generate_session_for_account": {
+      "description": "The username of the service account (or {user}, {workspaceBot}, {workspaceAdminBot}) to auto-generate a session for",
+      "type": "string"
+    },
+    "parameters": {
+      "description": "The parameters of the task",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "The name of the parameter used in the task script",
+            "type": "string"
+          },
+          "group": {
+            "description": "The optional group that the parameter belongs to for grouping parameters in the UI",
+            "type": "string"
+          },
+          "label": {
+            "description": "Label for the parameter for display in the UI",
+            "type": "string"
+          },
+          "help": {
+            "description": "Optional help for the parameter",
+            "type": "string"
+          },
+          "type": {
+            "description": "The type of the parameter",
+            "enum": [
+              "string",
+              "float",
+              "integer",
+              "boolean",
+              "enum",
+              "file",
+              "directory",
+              "secret",
+              "catalog"
+            ]
+          },
+          "list": {
+            "description": "The parameter is a list",
+            "type": "boolean"
+          },
+          "create": {
+            "description": "The file parameter is for a file that will be created",
+            "type": "boolean"
+          },
+          "value": {
+            "description": "The default value of the parameter",
+            "type": [
+              "string",
+              "boolean",
+              "number"
+            ]
+          },
+          "optional": {
+            "description": "Allow the value to be optional",
+            "type": "boolean"
+          },
+          "choices": {
+            "description": "The choices of the parameter",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pattern_match": {
+            "description": "Acceptable file matches for the parameter",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "supports_location_mode": {
+            "description": "The file or directory parameter supports a location with Read Only, No Append or Read Write mode. Read Write is the default and other modes can be opted into if supported.",
+            "type": "string",
+            "enum": [
+              "read_only",
+              "read_write",
+              "no_append"
+            ]
+          },
+          "path": {
+            "description": "The path used for the file or directory selector. Can be a location or a {variable} between curly braces",
+            "type": "string"
+          },
+          "editable": {
+            "description": "Allow editing of the parameter",
+            "type": "boolean"
+          },
+          "stage": {
+            "description": "The stage name to pull the parameter from",
+            "type": "string"
+          },
+          "stage_parameter": {
+            "description": "The parameter name of the parameter in the stage to use as the value",
+            "type": "string"
+          },
+          "stage_parameter_expression": {
+            "description": "The expression to use to construct the value from the stage parameters outputs",
+            "type": "string"
+          },
+          "persist_key": {
+            "description": "The key to use for persisting this parameter value at the workspace level. When provided, the parameter value will be saved and loaded as a default for future workflow runs.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "label"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "steps": {
+      "description": "The steps of the task",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "type"
+        ],
+        "properties": {
+          "name": {
+            "description": "The name of the step",
+            "type": "string"
+          },
+          "description": {
+            "description": "The description of the step",
+            "type": "string"
+          },
+          "type": {
+            "description": "The type of the step",
+            "type": "string",
+            "enum": [
+              "docker",
+              "cmd"
+            ]
+          },
+          "env": {
+            "description": "Additional environment variables of the step",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "command": {
+            "description": "The command of the step",
+            "type": "string"
+          },
+          "args": {
+            "description": "The arguments for the command of the step",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "docker": {
+            "description": "The docker settings of the step",
+            "type": "object",
+            "required": [],
+            "properties": {
+              "image": {
+                "description": "The docker image of the step",
+                "type": "string"
+              },
+              "shared_memory_size": {
+                "description": "The shared memory size of the task (e.x. 1g, 512m)",
+                "type": "string"
+              },
+              "workspace_mount": {
+                "description": "The path to mount the workspace into the container",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "agent_requirements": {
+      "type": "object",
+      "description": "The allocated resources for the task. These are hard limits enforced by the Docker container. The task must operate within the specified RAM limit; exceeding this limit will result in the task being killed.",
+      "properties": {
+        "agent_profile": {
+          "type": "string",
+          "description": "A specific agent profile to use for the task (otherwise an agent profile that meets the requirements will be used)"
+        },
+        "cpu_cores": {
+          "type": "number",
+          "description": "The number of CPU cores to allocate for the task"
+        },
+        "scheduler_cpu_cost": {
+          "type": "number",
+          "description": "The CPU cost to use for scheduling the task. This can be less than cpu_cores if the task is not CPU intensive. If not specified, cpu_cores will be used"
+        },
+        "memory_gb": {
+          "type": "number",
+          "description": "The amount of memory in GB to allocate for the task"
+        },
+        "runtime_limit_seconds": {
+          "type": "number",
+          "description": "The maximum amount of time in seconds that the task is allowed to run. The task will be killed if it has not completed in this time"
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the this resource profile (otherwise Default will be used)"
+        },
+        "description": {
+          "type": "string",
+          "description": "The description of the this resource profile"
+        }
+      },
+      "required": [
+        "cpu_cores",
+        "memory_gb"
+      ],
+      "additionalProperties": false
+    },
+    "alternative_agent_requirements": {
+      "type": "object",
+      "description": "The available resource profiles defining CPU and memory allocations",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "The description of the resource profile"
+          },
+          "agent_profile": {
+            "type": "string",
+            "description": "A specific agent profile to use for the task (otherwise an agent profile that meets the requirements will be used)"
+          },
+          "cpu_cores": {
+            "type": "number",
+            "description": "The number of CPU cores to allocate for this profile"
+          },
+          "scheduler_cpu_cost": {
+            "type": "number",
+            "description": "The CPU cost to use for scheduling the task. This can be less than cpu_cores if the task is not CPU intensive. If not specified, cpu_cores will be used"
+          },
+          "memory_gb": {
+            "type": "number",
+            "description": "The amount of memory in GB to allocate for this profile"
+          }
+        },
+        "required": [
+          "cpu_cores",
+          "memory_gb"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

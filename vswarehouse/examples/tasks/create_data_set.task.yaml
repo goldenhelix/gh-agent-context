@@ -1,0 +1,42 @@
+name: Create Data Set
+description: Create a small sample dataset
+agent_requirements:
+  cpu_cores: 1
+  memory_gb: 1
+
+parameters:
+  - name: output_dir
+    label: Output Directory
+    type: directory
+    create: true
+
+steps:
+  - name: create_data
+    type: cmd
+    description: Create sample dataset using Python
+    args:
+      - |-
+        python3 -c '
+        import csv
+        import random
+        from pathlib import Path
+        import os
+
+        # Create sample data
+        data = []
+        for i in range(10000):
+            data.append({
+                "id": i,
+                "value": random.uniform(0, 100),
+                "category": random.choice(["A", "B", "C"])
+            })
+
+        # Save to CSV
+        output_dir = Path(os.environ["output_dir"])
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(output_dir / "sample_data.csv", "w") as f:
+            writer = csv.DictWriter(f, fieldnames=["id", "value", "category"])
+            writer.writeheader()
+            writer.writerows(data)
+        '

@@ -1,0 +1,42 @@
+name: Process File
+description: Process a single input file (one fan-out instance) and write a per-file result.
+agent_requirements:
+  cpu_cores: 1
+  memory_gb: 0.1
+  runtime_limit_seconds: 60
+
+parameters:
+  - name: input_file
+    label: Input File
+    type: file
+    supports_location_mode: read_only
+    pattern_match: [ '*.txt' ]
+    help: One file, supplied by the workflow's glob fan-out (${0}).
+  - name: sample_name
+    label: Sample Name
+    type: string
+    help: Derived from the filename by the glob (${basename}).
+  - name: results_dir
+    label: Results Directory
+    type: directory
+    supports_location_mode: read_write
+    value: Documents/fanout_demo/results
+
+steps:
+  - name: process
+    description: Read the file, write a small result.
+    type: cmd
+    args:
+      - |-
+        set -euo pipefail
+        cd /scratch
+        mkdir -p "${results_dir}"
+        lines=$(wc -l < "${input_file}")
+        bytes=$(wc -c < "${input_file}")
+        out="${results_dir}/${sample_name}.result.txt"
+        {
+          echo "source file: ${input_file}"
+          echo "line count : ${lines}"
+          echo "byte count : ${bytes}"
+        } > "$out"
+        echo "result for: ${sample_name} -> ${out}"

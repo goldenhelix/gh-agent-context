@@ -1,0 +1,39 @@
+name: Generate Files
+description: Write `count` small text files into output_dir, then emit that directory (workspace-relative) for a downstream glob fan-out.
+agent_requirements:
+  cpu_cores: 1
+  memory_gb: 0.1
+  runtime_limit_seconds: 60
+
+parameters:
+  - name: output_dir
+    label: Output Directory
+    type: directory
+    supports_location_mode: read_write
+    help: Where the generated files are written (a workspace location).
+  - name: count
+    label: Number of files
+    type: integer
+    value: '4'
+
+steps:
+  - name: generate
+    description: Create the files and emit the directory for downstream fan-out.
+    type: cmd            # cmd steps omit `command:` — the args heredoc runs as bash
+    args:
+      - |-
+        set -euo pipefail
+        run_dir="$PWD"                 # capture the run OUTPUT dir BEFORE cd (for result.env)
+        cd /scratch
+
+        # output_dir is injected as an ABSOLUTE path (/w/<workspace>/<location>/...).
+        mkdir -p "${output_dir}"
+        for i in $(seq 1 "${count}"); do
+          printf 'sample %s\nline a\nline b\n' "$i" > "${output_dir}/sample_${i}.txt"
+        done
+        echo "Wrote ${count} files to ${output_dir}"
+
+        # Emit for the downstream glob stage. NOTE: strip the /w/<workspace>/ prefix —
+        # glob_parameter.path needs a WORKSPACE-RELATIVE base, not an absolute one.
+        echo "gen_dir=${output_dir#/w/${GH_WORKSPACE_ID}/}" >> "$run_dir/result.env"
+        echo "file_count=${count}"                          >> "$run_dir/result.env"

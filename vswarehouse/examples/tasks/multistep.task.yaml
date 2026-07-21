@@ -1,0 +1,58 @@
+name: Multi-Step Logging Test
+description: |
+  Three sequential steps, each producing deterministic stdout and stderr
+  output. Used by the gautil client smoke test to verify that task-log
+  correctly stitches output across steps and tracks the (ol/ob, el/eb)
+  index entries produced as each step writes.
+
+agent_requirements:
+  cpu_cores: 1
+  memory_gb: 0.1
+  runtime_limit_seconds: 30
+
+parameters:
+  - name: lines_per_step
+    label: Lines per stream per step
+    type: integer
+    value: '3'
+    optional: true
+
+steps:
+  - name: setup
+    description: First step — print setup messages
+    type: cmd
+    command: bash
+    args:
+      - |-
+        echo "setup: starting"
+        for i in $(seq 1 ${lines_per_step}); do
+          echo "setup stdout line ${i}"
+          echo "setup stderr line ${i}" >&2
+        done
+        echo "setup: done"
+
+  - name: process
+    description: Second step — interleave stdout and stderr
+    type: cmd
+    command: bash
+    args:
+      - |-
+        echo "process: starting"
+        for i in $(seq 1 ${lines_per_step}); do
+          echo "process stdout ${i}"
+          echo "process stderr ${i}" >&2
+        done
+        echo "process: done"
+
+  - name: cleanup
+    description: Third step — final messages
+    type: cmd
+    command: bash
+    args:
+      - |-
+        echo "cleanup: starting"
+        for i in $(seq 1 ${lines_per_step}); do
+          echo "cleanup stdout ${i}"
+          echo "cleanup stderr ${i}" >&2
+        done
+        echo "cleanup: done"

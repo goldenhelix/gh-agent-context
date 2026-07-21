@@ -1,0 +1,59 @@
+name: Germline VSPipeline Create Project
+description: Create a vspipeline project from a folder of input files
+auto_generate_session_for_account: "{workspaceBot}"
+
+agent_requirements:
+  cpu_cores: 4
+  memory_gb: 12
+
+parameters:
+  - name: base_path
+    label: Input Folder
+    help: The input folder of vcf.gz files to analyze
+    type: directory
+
+  - name: project_name
+    label: Project Name
+    value: VSProject
+    type: string
+
+  - name: project_template
+    label: VarSeq Project Template
+    type: file
+    path: /AppData/VarSeq/User Data/ProjectTemplates/
+    value: /Automation/Workflows/Examples/Germline Example/germline_example.vsproject-template
+
+steps:
+  - name: vspipeline
+    description: Run vspipeline
+    type: cmd
+    docker:
+      image: ${VSPIPELINE_DOCKER_IMAGE}
+    args:
+      - |-
+        set -exvuo pipefail
+
+        export GOLDENHELIX_USERDATA=${WORKSPACE_DIR}/AppData
+
+        # Output the number of detected files
+        echo "Running VSPipeline on ${base_path}"
+        cd "${base_path}"
+
+        # Run VSPipeline: create a project, import the VCFs, download required sources, wait for tasks to complete, get the task list, and save the project
+        rm -rf "${project_name}"
+
+        vcf_files=$(find . -name "*.vcf.gz" -type f | paste -sd ',' - | sed 's/\([^,]*\)/"\1"/g')
+
+        # Write the commands to create-project.vs-batch using a heredoc
+        cat <<EOF > create-project.vs-batch
+        get_version
+        project_create "${project_name}" "$project_template"
+        import files="${vcf_files}" append_files_with_same_samples=True
+        download_required_sources
+        task_wait
+        get_task_list
+        project_close
+        EOF
+
+        /opt/vspipeline/vspipeline \
+            -c batch file=create-project.vs-batch

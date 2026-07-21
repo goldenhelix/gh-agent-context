@@ -1,0 +1,28 @@
+name: PGx Catalog Builder
+description: Customize PGx drugs and recommendations for reporting
+icon_name: pill
+auto_generate_session_for_account: "{workspaceAdminBot}"
+starting_url: /pgx_catalog
+retry_count: 3
+retry_delay: 60
+
+agent_requirements:
+  name: Small
+  scheduler_cpu_cost: 1
+  cpu_cores: 1
+  memory_gb: 1
+  description: Opening existing projects or working with small projects
+
+parameters:
+  - name: catalog_prefix
+    label: The Catalog Prefix
+    type: string
+    optional: true
+    value: ''
+
+plugin:
+  command: /opt/plugins/run-plugin.sh
+  docker:
+    shared_memory_size: 1g
+  env:
+    UPSERT_CATALOGS_SYSTEM_TEMPLATES: "PGxDrugs,PGxGeneAssociations,PGxDiplotypes,PGxRecommendations,PGxStructuralVariants,PGxVariantHaplotypes"

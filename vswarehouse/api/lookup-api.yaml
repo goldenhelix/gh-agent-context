@@ -1,0 +1,1793 @@
+openapi: '3.0.2'
+info:
+  title: Lookup API
+  version: '1.0.0'
+  description: 'Provides endpoints for workspace lookups, including variant details, CNV data, region queries, and source availability for downloads.'
+
+externalDocs:
+  url: '/docs/api-docs'
+  description: API Documentation
+
+servers:
+  - url: '/w/my_workspace/api/lookup'
+
+
+
+
+paths:
+  /:
+    get:
+      operationId: "config"
+      summary: "Report the workspace's configured and resolved gene/reference sources."
+      description: "Internal diagnostic that echoes the configured versus resolved gene and reference annotation sources for the workspace build. Not a general lookup; use listSources to enumerate available sources."
+      x-agent-expose: "hidden"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigResponse"
+                type: "object"
+  /resolve:
+    post:
+      operationId: "resolveAnnotationSource"
+      summary: "Resolve an annotation source specification to concrete metadata."
+      description: "Resolves an AnnotationSource (built-in id, series, or catalog reference) to its concrete SourceInfo: name, URL, version, coordinate system, feature type, entity/locus counts, and optionally its field schema. Use after listSources when you need the fields of a specific source, or to confirm a source is readable before querying it with genomicQuery/tableLookup/tableRead."
+      x-agent-expose: "progressive"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "source"
+              properties:
+                source:
+                  $ref: "#/components/schemas/AnnotationSource"
+                  type: "object"
+                  description: "Source of the annotation."
+                includeFields:
+                  type: "boolean"
+                  description: "Include the list of source fields in the response."
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceInfo"
+                type: "object"
+  /download:
+    post:
+      operationId: "download"
+      summary: "Start downloading an annotation source to the local cache."
+      description: "Initiates a background download of a network annotation source and returns a processId (empty string when nothing needs downloading); poll /ps/{processId} for status. Side-effecting infrastructure operation."
+      x-agent-expose: "hidden"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "source"
+              properties:
+                source:
+                  $ref: "#/components/schemas/AnnotationSource"
+                  type: "object"
+                  description: "Source of the annotation."
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "string"
+  /sources:
+    get:
+      operationId: "listSources"
+      summary: "List annotation sources available in the workspace."
+      description: "Enumerates the annotation sources (built-in and watched-folder catalogs) available for the workspace build, with metadata for each (name, series, version, feature type, coordinate system, counts). Start here to discover what data can be queried, then feed a source into resolveAnnotationSource, genomicQuery, tableLookup, or tableRead. Use the filter params to narrow large source lists."
+      x-agent-expose: "promoted"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "versionMode"
+          in: "query"
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceVersionMode"
+          description: "Whether to return only the latest version per series (LatestOnly) or all versions (All). Sources without a series are always included."
+
+        - name: "series"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            description: "Exact series name filter. If provided, only sources with this seriesName are returned."
+          description: "Exact series name filter. If provided, only sources with this seriesName are returned."
+
+        - name: "nameContains"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            description: "Case-insensitive substring filter applied to the source display name."
+          description: "Case-insensitive substring filter applied to the source display name."
+
+        - name: "featureType"
+          in: "query"
+          required: false
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceFeatureType"
+          description: "Filter to sources of one feature type. For the gene/transcript annotation track use TypeGene; for variant catalogs use TypeVariant."
+
+        - name: "isNetworkSource"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "If provided, filters to only network sources (true) or only local sources (false)."
+          description: "If provided, filters to only network sources (true) or only local sources (false)."
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/SourceInfo"
+                  type: "object"
+  /variant:
+    get:
+      operationId: "variantQuery"
+      summary: "Parse a free-text variant query into normalized ref/alt variants."
+      description: "Resolves a small-variant description into one or more normalized genomic ref/alt variants for the workspace build. Accepts many notations: coordinate+alleles (e.g. 'chr1:12345 A/T'), genomic HGVS (e.g. 'chr4:g.1803568C>G'), protein HGVS with a transcript (e.g. 'NM_000546(TP53):p.Arg175Leu'), protein-change shorthand (e.g. 'BRAF V600E', which may expand to multiple codon-level variants), dbSNP rsIDs (e.g. 'rs17337177'), and ClinVar VCV IDs. The primary tool for turning a user's variant string into coordinates."
+      x-agent-expose: "promoted"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "query"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "BRAF V600E"
+            description: "Free-text variant to parse: coordinate+alleles, genomic/protein HGVS, GENE p.Change shorthand, rsID, or VCV ID."
+          description: "Free-text variant to parse: coordinate+alleles, genomic/protein HGVS, GENE p.Change shorthand, rsID, or VCV ID."
+          example: "BRAF V600E"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariantQueryResponse"
+                type: "object"
+  /gene:
+    get:
+      operationId: "geneQuery"
+      summary: "Find genes by symbol, alias, or numeric gene ID."
+      description: "Resolves a gene by HGNC symbol, alias, or numeric RefSeq/Entrez GeneID and returns matching gene definitions with coordinates and aliases for the workspace build. The primary tool for turning a gene name into a gene ID and locus. Use includePrefixMatches for autocomplete-style prefix search and includeAliases to also match on alias symbols."
+      x-agent-expose: "promoted"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "query"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "BRCA1"
+            description: "The gene name, alias, or gene ID to search for."
+          description: "The gene name, alias, or gene ID to search for."
+          example: "BRCA1"
+
+        - name: "includePrefixMatches"
+          in: "query"
+          required: true
+          schema:
+            type: "boolean"
+            description: "If true, include genes whose names start with the query (e.g., \"brca\" matches \"BRCA1\" and \"BRCA2\"). If false, only exact matches are returned. Defaults to false."
+          description: "If true, include genes whose names start with the query (e.g., \"brca\" matches \"BRCA1\" and \"BRCA2\"). If false, only exact matches are returned. Defaults to false."
+
+        - name: "includeAliases"
+          in: "query"
+          required: true
+          schema:
+            type: "boolean"
+            description: "If true, include search results for this query as a gene alias (exact matches only)."
+          description: "If true, include search results for this query as a gene alias (exact matches only)."
+
+        - name: "limit"
+          in: "query"
+          required: true
+          schema:
+            type: "number"
+            format: "int32"
+            description: "Max number of genes to return. Defaults to 10."
+          description: "Max number of genes to return. Defaults to 10."
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneQueryResponse"
+                type: "object"
+  /variant/transcript:
+    get:
+      operationId: "variantTranscript"
+      summary: "Annotate a variant against a specific (or default) transcript."
+      description: "Computes the transcript-level consequence of a ref/alt variant: sequence ontology term, coding/protein HGVS (c./p.), affected exon, amino-acid change, and distances. If transcriptName is omitted, the gene's default transcript is used. Obtain a RefAltVariant from variantQuery first."
+      x-agent-expose: "progressive"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "variant"
+          in: "query"
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefAltVariant"
+          description: "Normalized ref/alt variant, as returned by variantQuery."
+
+        - name: "transcriptName"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "NM_004333"
+            description: "RefSeq transcript to annotate against; if omitted, the gene's default transcript is used."
+          description: "RefSeq transcript to annotate against; if omitted, the gene's default transcript is used."
+          example: "NM_004333"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariantTranscript"
+                type: "object"
+  /variant/gdot:
+    get:
+      operationId: "variantGDot"
+      summary: "Compute genomic HGVS (g.) for a variant, with right-aligned form."
+      description: "Returns the genomic-level HGVS (g.) notation for a ref/alt variant, plus its right-aligned (3'-shifted) representation and that variant's g. notation. Use to normalize a variant to canonical g. HGVS."
+      x-agent-expose: "progressive"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "variant"
+          in: "query"
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefAltVariant"
+          description: "Normalized ref/alt variant, as returned by variantQuery."
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariantGDot"
+                type: "object"
+  /variant/overlap/transcripts:
+    get:
+      operationId: "variantOverlapTranscripts"
+      summary: "List every transcript a variant overlaps, each with its consequence."
+      description: "Returns one annotation per transcript overlapping the variant's locus (sequence ontology, c./p. HGVS, exon, AA change), rather than only the default transcript as in variantTranscript. Use when you need every transcript's effect for a variant."
+      x-agent-expose: "progressive"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "variant"
+          in: "query"
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefAltVariant"
+          description: "Normalized ref/alt variant, as returned by variantQuery."
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/VariantTranscript"
+                  type: "object"
+  /cnv:
+    get:
+      operationId: "cnvQuery"
+      summary: "Parse a free-text CNV query into a copy-number variant."
+      description: "Resolves a copy-number description into a single CNV (chr/start/stop plus gain/loss/LOH type) for the workspace build. Accepts gene/exon spans (e.g. 'BRCA2 exon 3-5 deletion'), cytoband notation (e.g. 'del(17p13.1)'), coordinate ranges (e.g. '13:32,910,400-32,953,500 loss'), and transcript c. dup/del HGVS (e.g. 'NM_000059.4:c.1913_8762dup')."
+      x-agent-expose: "progressive"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "query"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "BRCA2 exon 3-5 deletion"
+            description: "Free-text CNV to parse: gene/exon span, cytoband, coordinate range, or c. dup/del HGVS."
+          description: "Free-text CNV to parse: gene/exon span, cytoband, coordinate range, or c. dup/del HGVS."
+          example: "BRCA2 exon 3-5 deletion"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CnvQueryResponse"
+                type: "object"
+  /breakend:
+    get:
+      operationId: "breakendQuery"
+      summary: "Parse a free-text breakend query into breakend variants."
+      description: "Resolves a breakend or paired-breakend description into BreakendVariant records (locus, mate locus, retained side, inserted sequence) for the workspace build. Accepts coordinate pairs (e.g. '9:133751216, 22:23608316') and genomic HGVS inv/del/dup (e.g. '10:g.12210283_12255513inv'). For gene-fusion resolution with transcript effects, use parseRearrangement instead."
+      x-agent-expose: "progressive"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "query"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "9:133751216, 22:23608316"
+            description: "Free-text breakend to parse: coordinate pair or genomic HGVS inv/del/dup."
+          description: "Free-text breakend to parse: coordinate pair or genomic HGVS inv/del/dup."
+          example: "9:133751216, 22:23608316"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BreakendQueryResponse"
+                type: "object"
+  /parse-rearrangement:
+    get:
+      operationId: "parseRearrangement"
+      summary: "Resolve a fusion/rearrangement query into annotated candidates."
+      description: "Parses a free-text gene-fusion or structural-rearrangement query into structured candidates with SV type, predicted transcript effect, breakend loci, and 5'/3' transcript annotations. Accepts gene-pair fusion syntax (e.g. 'BCR::ABL1'), breakpoint coordinates, c./g. HGVS, and exon-level fusion notation. The primary tool for resolving fusions; for simple paired breakends without transcript effects use breakendQuery."
+      x-agent-expose: "promoted"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "query"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "BCR::ABL1"
+            description: "Free-text query (e.g. BCR::ABL1, breakpoint coordinates, c./g. HGVS, exon-level fusion syntax)."
+          description: "Free-text query (e.g. BCR::ABL1, breakpoint coordinates, c./g. HGVS, exon-level fusion syntax)."
+          example: "BCR::ABL1"
+
+        - name: "assembly"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "GRCh_38"
+            description: "Coord sys id for the workspace build (e.g. GRCh_38); must match the configured lookup assembly."
+          description: "Coord sys id for the workspace build (e.g. GRCh_38); must match the configured lookup assembly."
+          example: "GRCh_38"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParseRearrangementResponse"
+                type: "object"
+  /default-transcript-for-gene:
+    get:
+      operationId: "defaultTranscriptForGene"
+      summary: "Resolve the default RefSeq transcript for a gene; when several transcripts exist, pick by ClinVar assessment counts (no app gene preferences)."
+      description: "Returns a single default RefSeq transcript for a gene, chosen by ClinVar assessment counts when multiple transcripts exist. Ignores per-user/app gene preferences; for the full transcript list with counts use geneTranscripts. Identify the gene via geneId (preferred) or geneName."
+      x-agent-expose: "progressive"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "assembly"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "GRCh_38"
+            description: "Coord sys id for the workspace build; must match the configured lookup assembly."
+          description: "Coord sys id for the workspace build; must match the configured lookup assembly."
+          example: "GRCh_38"
+
+        - name: "geneId"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "672"
+            description: "RefSeq GeneID; takes precedence over geneName when both are set."
+          description: "RefSeq GeneID; takes precedence over geneName when both are set."
+          example: "672"
+
+        - name: "geneName"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "BRCA1"
+            description: "Gene symbol; used when geneId is omitted."
+          description: "Gene symbol; used when geneId is omitted."
+          example: "BRCA1"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DefaultTranscriptForGeneResponse"
+                type: "object"
+  /gene-transcripts:
+    get:
+      operationId: "geneTranscripts"
+      summary: "List all RefSeq transcripts for a gene with per-transcript ClinVar counts."
+      description: "Lists every RefSeq transcript for a gene, each with its ClinVar assessment count, for the workspace build. Use to choose among transcripts; for just the default pick use defaultTranscriptForGene. Identify the gene via geneId (preferred) or geneName."
+      x-agent-expose: "progressive"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "assembly"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "GRCh_38"
+            description: "Coord sys id for the workspace build; must match the configured lookup assembly."
+          description: "Coord sys id for the workspace build; must match the configured lookup assembly."
+          example: "GRCh_38"
+
+        - name: "geneId"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "672"
+            description: "RefSeq GeneID; takes precedence over geneName when both are set."
+          description: "RefSeq GeneID; takes precedence over geneName when both are set."
+          example: "672"
+
+        - name: "geneName"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "BRCA1"
+            description: "Gene symbol; used when geneId is omitted."
+          description: "Gene symbol; used when geneId is omitted."
+          example: "BRCA1"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneTranscriptsResponse"
+                type: "object"
+  /region:
+    get:
+      operationId: "regionQuery"
+      summary: "Parse a free-text region string into a genomic interval."
+      description: "Resolves a region description into a single genomic interval (chr/start/stop) for the workspace build. Accepts forms like '1:12345-67890' and 'chrX-1000-2000'. Use to turn a user's region string into coordinates before a genomicQuery."
+      x-agent-expose: "progressive"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "query"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "1:12345-67890"
+            description: "Free-text region to parse, e.g. '1:12345-67890' or 'chrX-1000-2000'."
+          description: "Free-text region to parse, e.g. '1:12345-67890' or 'chrX-1000-2000'."
+          example: "1:12345-67890"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionQueryResponse"
+                type: "object"
+  /genomic/query/{query}:
+    post:
+      operationId: "genomicQuery"
+      summary: "Takes a genomic query \"chr-start-stop\" (0-based) or \"chr-pos\" (1-based) and returns annotations for that region."
+      description: "Reads annotation records from a source that overlap a genomic region, with optional field selection, filter expression, and paging. This is a full record read that can return many rows; prefer regionQuery to resolve coordinates and resolveAnnotationSource to inspect fields first. Use tableLookup for indexed key lookups and readContinue to page a cursor."
+      x-agent-expose: "progressive"
+      x-agent-cost: "expensive"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "query"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "source"
+              properties:
+                source:
+                  $ref: "#/components/schemas/AnnotationSource"
+                  type: "object"
+                  description: "Source of the annotation."
+                match:
+                  $ref: "#/components/schemas/GenomicQueryMode"
+                  type: "object"
+                  description: "Coordinate-level match strategy."
+                jaccardThreshold:
+                  type: "number"
+                  format: "double"
+                  description: "Jaccard similarity cutoff when match == within/overlap on large CNVs."
+                format:
+                  type: "array"
+                  items:
+                    $ref: "#/components/schemas/FormatOption"
+                    type: "object"
+                  description: "Response sections to return (reuses catalog 'format' options)."
+                fieldIndexes:
+                  type: "array"
+                  items:
+                    type: "number"
+                    format: "int32"
+                  description: "Fields to return by index. Default is all fields."
+                fieldExpressions:
+                  type: "array"
+                  items:
+                    type: "string"
+                  example:
+                    - "Chr"
+                    - "Start"
+                    - "Stop"
+                    - "Chr ~ \":\" ~ (Start + 1) ~ \"-\" ~ Stop"
+                    - "RefAlt"
+                    - "Classification"
+                    - "len(classification)"
+                    - "slice(Classification, 0, 100)"
+                  description: "Fields to return by symbol. Default is all fields."
+                fieldNames:
+                  type: "array"
+                  items:
+                    type: "string"
+                  description: "Fields to return by field name. Default is all fields."
+                filterTree:
+                  $ref: "#/components/schemas/ExpressionNode"
+                  type: "object"
+                  description: "Optional filter expression, can be a tree of logical operators and predicates."
+                limit:
+                  type: "number"
+                  format: "int32"
+                  description: "Max records per page (1-10000)."
+                offset:
+                  type: "number"
+                  format: "int32"
+                  description: "Starting record position (for stateless paging)."
+                enableCursor:
+                  type: "boolean"
+                  description: "If true, enables cursor-based pagination and generates a cursor in the response when hasMore is true."
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LookupResponse"
+                type: "object"
+  /table/lookup:
+    post:
+      operationId: "tableLookup"
+      summary: "Look up records in a source by an indexed field value."
+      description: "Returns records from a tabular or genomic source where an indexed field exactly matches a value (case-sensitive or -insensitive), with optional field selection, filter tree, and region filtering. Targeted key lookup; for a full scan use tableRead, for region overlap use genomicQuery. The lookupField must be indexed (check the fields from resolveAnnotationSource)."
+      x-agent-expose: "progressive"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "source"
+                - "lookupField"
+                - "lookupValue"
+              properties:
+                source:
+                  $ref: "#/components/schemas/AnnotationSource"
+                  type: "object"
+                lookupField:
+                  type: "string"
+                  description: "The field to query on, indexed key required."
+                lookupValue:
+                  type: "string"
+                  description: "The value to query on."
+                lookupMode:
+                  $ref: "#/components/schemas/TableLookupMode"
+                  type: "object"
+                format:
+                  type: "array"
+                  items:
+                    $ref: "#/components/schemas/FormatOption"
+                    type: "object"
+                  description: "Response sections to return (reuses catalog 'format' options)."
+                fieldIndexes:
+                  type: "array"
+                  items:
+                    type: "number"
+                    format: "int32"
+                  description: "Fields to return by index. Default is all fields."
+                fieldSymbols:
+                  type: "array"
+                  items:
+                    type: "string"
+                  description: "Fields to return by symbol. Default is all fields."
+                fieldNames:
+                  type: "array"
+                  items:
+                    type: "string"
+                  description: "Fields to return by field name. Default is all fields."
+                filterTree:
+                  $ref: "#/components/schemas/ExpressionNode"
+                  type: "object"
+                  description: "Optional filter expression, can be a tree of logical operators and predicates."
+                filterRegions:
+                  type: "array"
+                  items:
+                    $ref: "#/components/schemas/GenomicSegment"
+                    type: "object"
+                  description: "Optional list of genomic regions. If provided, only records that overlap any of these regions are returned."
+                limit:
+                  type: "number"
+                  format: "int32"
+                  description: "Max records per page (1-10000)."
+                offset:
+                  type: "number"
+                  format: "int32"
+                  description: "Starting record position (for stateless paging)."
+                enableCursor:
+                  type: "boolean"
+                  description: "If true, enables cursor-based pagination and generates a cursor in the response when hasMore is true."
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LookupResponse"
+                type: "object"
+  /table/read:
+    post:
+      operationId: "tableRead"
+      summary: "Read records from a source table with optional filtering and paging."
+      description: "Streams records from a source (typically a tabular/non-genomic source) with optional field selection, filter expression, and paging. This is a full-table read that can be large; prefer tableLookup for a keyed lookup or resolveAnnotationSource for just metadata. Use readContinue to fetch further pages via the returned cursor."
+      x-agent-expose: "progressive"
+      x-agent-cost: "expensive"
+      x-agent-permission: "file:read"
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "source"
+              properties:
+                source:
+                  $ref: "#/components/schemas/AnnotationSource"
+                  type: "object"
+                format:
+                  type: "array"
+                  items:
+                    $ref: "#/components/schemas/FormatOption"
+                    type: "object"
+                  description: "Response sections to return (reuses catalog 'format' options)."
+                fieldIndexes:
+                  type: "array"
+                  items:
+                    type: "number"
+                    format: "int32"
+                  description: "Fields to return by index. Default is all fields."
+                fieldExpressions:
+                  type: "array"
+                  items:
+                    type: "string"
+                  example:
+                    - "chr"
+                    - "start"
+                    - "stop"
+                    - "chr ~ ':' ~ start + 1 ~ '-' ~ stop"
+                    - "refAlt"
+                    - "classification"
+                    - "len(classification)"
+                    - "mid(classification, 0, 100)"
+                  description: "Fields to return by symbol. Default is all fields."
+                fieldNames:
+                  type: "array"
+                  items:
+                    type: "string"
+                  description: "Fields to return by field name. Default is all fields."
+                filterTree:
+                  $ref: "#/components/schemas/ExpressionNode"
+                  type: "object"
+                  description: "Optional filter expression, can be a tree of logical operators and predicates."
+                limit:
+                  type: "number"
+                  format: "int32"
+                  description: "Max records per page (1-10000)."
+                offset:
+                  type: "number"
+                  format: "int32"
+                  description: "Starting record position (for stateless paging)."
+                enableCursor:
+                  type: "boolean"
+                  description: "If true, enables cursor-based pagination and generates a cursor in the response when hasMore is true. If false, cursor is only generated when a cursor parameter is provided."
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LookupResponse"
+                type: "object"
+  /continue/{cursor}:
+    post:
+      operationId: "readContinue"
+      summary: "Continues a genomic query, tableRead, or tableLookup from a previous response."
+      description: "Fetches the next page of a genomicQuery, tableRead, or tableLookup using the cursor returned when hasMore was true and cursoring was enabled. Continues an in-progress read."
+      x-agent-expose: "progressive"
+      x-agent-cost: "expensive"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "cursor"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                format:
+                  type: "array"
+                  items:
+                    $ref: "#/components/schemas/FormatOption"
+                    type: "object"
+                  description: "Response sections to return (reuses catalog 'format' options)."
+                limit:
+                  type: "number"
+                  format: "int32"
+                  description: "Max records per page (1-1000)."
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LookupResponse"
+                type: "object"
+  /extract/diseases-and-phenotypes:
+    get:
+      operationId: "extractDiseasesAndPhenotypes"
+      summary: "Extract disease/phenotype ontology terms from free text."
+      description: "Scans clinical free text for disease and phenotype mentions and resolves them to ontology identifiers (HPO, MONDO), returning matched terms and their IDs. Also accepts explicit ontology IDs embedded in the text (e.g. 'MONDO:0011076 HP:0000717'). Requires the HPO/MONDO sources to be present; returns an error if they are unavailable."
+      x-agent-expose: "progressive"
+      x-agent-cost: "cheap"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "text"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "persistent seizures and developmental delay"
+            description: "The text to extract diseases and phenotypes from."
+          description: "The text to extract diseases and phenotypes from."
+          example: "persistent seizures and developmental delay"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractDiseasesAndPhenotypesResponse"
+                type: "object"
+components:
+  schemas:
+    TableLookupMode:
+      type: "string"
+      enum:
+        - "ExactCaseSensitive"
+        - "ExactCaseInsensitive"
+
+    CnvType:
+      type: "string"
+      enum:
+        - "TypeLoss"
+        - "TypeGain"
+        - "TypeLoh"
+        - "TypeUnknown"
+
+    RegionRetained:
+      type: "string"
+      enum:
+        - "Before"
+        - "After"
+        - "Unknown"
+
+    SourceVersionMode:
+      type: "string"
+      enum:
+        - "LatestOnly"
+        - "All"
+
+    SourceFeatureType:
+      type: "string"
+      enum:
+        - "TypeGeneric"
+        - "TypeCytoband"
+        - "TypeGene"
+        - "TypeVariant"
+        - "TypeValue"
+        - "TypeCharSequence"
+        - "TypeArraySequence"
+        - "TypeAlignment"
+        - "TypeVariantMap"
+        - "TypeLD"
+        - "TypeHeatMap"
+        - "TypeTabular"
+        - "TypeUnspecified"
+        - "TypeCharArraySequence"
+
+    GenePrefImportMode:
+      type: "string"
+      enum:
+        - "GenePrefImportGoldenHelixDefault"
+        - "GenePrefImportEmpty"
+
+    FusionBreakendOrientation:
+      type: "string"
+      enum:
+        - "BreakendOrientLeft"
+        - "BreakendOrientRight"
+
+    FusionBreakendDirection:
+      type: "string"
+      enum:
+        - "BreakendInsertBefore"
+        - "BreakendInsertAfter"
+
+    RearrangementSvType:
+      type: "string"
+      enum:
+        - "RearrSvUnknown"
+        - "RearrSvTranslocation"
+        - "RearrSvInversion"
+        - "RearrSvDeletion"
+        - "RearrSvDuplication"
+        - "RearrSvInsertion"
+        - "RearrSvInversionInsertion"
+        - "RearrSvDeletionInsertion"
+
+    RearrangementFusionEffect:
+      type: "string"
+      enum:
+        - "RearrFxUnknown"
+        - "RearrFxNonfunctional"
+        - "RearrFxInFrame"
+        - "RearrFxFrameshift"
+        - "RearrFxTranscriptAblation"
+        - "RearrFxTranscriptFusion"
+        - "RearrFxFivePrimePromoter"
+        - "RearrFxThreePrimeUtr"
+        - "RearrFxNovelNoncodingRna"
+
+    FusionGenomicRegion:
+      type: "object"
+      properties:
+        assembly:
+          type: "string"
+        chr:
+          type: "string"
+        start:
+          type: "number"
+          format: "int32"
+        stop:
+          type: "number"
+          format: "int32"
+      required:
+        - "assembly"
+        - "chr"
+        - "start"
+        - "stop"
+
+    SelectableFusionTranscript:
+      type: "object"
+      properties:
+        breakend:
+          $ref: "#/components/schemas/FusionGenomicRegion"
+          type: "object"
+        gene:
+          type: "string"
+        geneId:
+          type: "string"
+        transcriptName:
+          type: "string"
+        proteinId:
+          type: "string"
+        firstExonPreserved:
+          type: "number"
+          format: "int32"
+        lastExonPreserved:
+          type: "number"
+          format: "int32"
+        strand:
+          type: "string"
+        codingBasesPreserved:
+          type: "number"
+          format: "int32"
+        percentCodingPreserved:
+          type: "number"
+          format: "double"
+        orientation:
+          $ref: "#/components/schemas/FusionBreakendOrientation"
+          type: "object"
+        direction:
+          $ref: "#/components/schemas/FusionBreakendDirection"
+          type: "object"
+      required:
+        - "gene"
+        - "geneId"
+        - "transcriptName"
+        - "proteinId"
+        - "strand"
+        - "orientation"
+        - "direction"
+
+    SelectableRearrangementVariant:
+      type: "object"
+      properties:
+        assembly:
+          type: "string"
+        chr:
+          type: "string"
+        start:
+          type: "number"
+          format: "int32"
+        stop:
+          type: "number"
+          format: "int32"
+        svType:
+          $ref: "#/components/schemas/RearrangementSvType"
+          type: "object"
+      required:
+        - "assembly"
+        - "chr"
+        - "start"
+        - "stop"
+        - "svType"
+
+    SelectableRearrangementSampleState:
+      type: "object"
+      properties:
+        callState:
+          type: "string"
+        supportingReads:
+          type: "number"
+          format: "int32"
+        wtReads5Prime:
+          type: "number"
+          format: "int32"
+        wtReads3Prime:
+          type: "number"
+          format: "int32"
+        evidenceValue:
+          type: "string"
+        evidenceUnits:
+          type: "string"
+
+    SelectableRearrangement:
+      type: "object"
+      properties:
+        recordId:
+          type: "number"
+          format: "int32"
+        recordAxisId:
+          type: "string"
+        selected:
+          type: "boolean"
+        name:
+          type: "string"
+        autoSummary:
+          type: "string"
+        variant:
+          $ref: "#/components/schemas/SelectableRearrangementVariant"
+          type: "object"
+        effect:
+          $ref: "#/components/schemas/RearrangementFusionEffect"
+          type: "object"
+        gDot:
+          type: "string"
+        cDot:
+          type: "string"
+        insertion:
+          type: "string"
+        svStates:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/SelectableRearrangementSampleState"
+            type: "object"
+        fivePrimeTranscript:
+          $ref: "#/components/schemas/SelectableFusionTranscript"
+          type: "object"
+        threePrimeTranscript:
+          $ref: "#/components/schemas/SelectableFusionTranscript"
+          type: "object"
+        selectable:
+          type: "boolean"
+        errorMessage:
+          type: "string"
+      required:
+        - "selected"
+        - "name"
+        - "autoSummary"
+        - "variant"
+        - "effect"
+        - "insertion"
+        - "svStates"
+        - "fivePrimeTranscript"
+        - "selectable"
+
+    ParseRearrangementResponse:
+      type: "object"
+      properties:
+        errorMessage:
+          type: "string"
+        rearrangements:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/SelectableRearrangement"
+            type: "object"
+
+    GenomicSegment:
+      type: "object"
+      properties:
+        chr:
+          type: "string"
+          example: "1"
+        start:
+          type: "number"
+          format: "int32"
+          example: 12344
+        stop:
+          type: "number"
+          format: "int32"
+          example: 67890
+      required:
+        - "chr"
+        - "start"
+        - "stop"
+
+    CopyNumberVariant:
+      type: "object"
+      properties:
+        chr:
+          type: "string"
+          example: "13"
+        start:
+          type: "number"
+          format: "int32"
+          example: 32893213
+        stop:
+          type: "number"
+          format: "int32"
+          example: 32900287
+        type:
+          $ref: "#/components/schemas/CnvType"
+          type: "object"
+      required:
+        - "chr"
+        - "start"
+        - "stop"
+        - "type"
+
+    BreakendVariant:
+      type: "object"
+      properties:
+        chr:
+          type: "string"
+          example: "9"
+        start:
+          type: "number"
+          format: "int32"
+          example: 133751215
+        retained:
+          $ref: "#/components/schemas/RegionRetained"
+          type: "object"
+        insertion:
+          type: "string"
+        mateChr:
+          type: "string"
+          example: "22"
+        mateStart:
+          type: "number"
+          format: "int32"
+          example: 23608315
+        mateRetained:
+          $ref: "#/components/schemas/RegionRetained"
+          type: "object"
+      required:
+        - "chr"
+        - "start"
+        - "retained"
+        - "insertion"
+        - "mateChr"
+        - "mateStart"
+        - "mateRetained"
+
+    RefAltVariant:
+      type: "object"
+      properties:
+        chr:
+          type: "string"
+          example: "7"
+        start:
+          type: "number"
+          format: "int32"
+          example: 140453135
+        stop:
+          type: "number"
+          format: "int32"
+          example: 140453136
+        refAlt:
+          type: "string"
+          example: "A/T"
+      required:
+        - "chr"
+        - "start"
+        - "stop"
+        - "refAlt"
+
+    GeneDefinition:
+      type: "object"
+      properties:
+        name:
+          type: "string"
+          description: "Primary gene symbol."
+          example: "BRCA1"
+        fullName:
+          type: "string"
+          description: "Full descriptive gene name."
+          example: "BRCA1 DNA repair associated"
+        geneId:
+          type: "string"
+          description: "Numeric RefSeq/Entrez GeneID; pass to the geneId params on other lookup calls."
+          example: "672"
+        aliases:
+          type: "array"
+          items:
+            type: "string"
+          description: "Alternative symbols this gene is also known by."
+        chr:
+          type: "string"
+          description: "Chromosome of the gene (span of all transcripts); omitted if unavailable."
+          example: "17"
+        start:
+          type: "number"
+          format: "int32"
+          description: "Minimum start position across all transcripts for this gene (0-based)."
+        stop:
+          type: "number"
+          format: "int32"
+          description: "Maximum stop position across all transcripts for this gene."
+      required:
+        - "name"
+        - "fullName"
+        - "geneId"
+        - "aliases"
+
+    VariantGDot:
+      type: "object"
+      properties:
+        variant:
+          $ref: "#/components/schemas/RefAltVariant"
+          type: "object"
+        gDot:
+          type: "string"
+          example: "g.140453136A>T"
+        rightAlignedVariant:
+          $ref: "#/components/schemas/RefAltVariant"
+          type: "object"
+        gDotRightAligned:
+          type: "string"
+          example: "g.140453136A>T"
+      required:
+        - "variant"
+        - "gDot"
+        - "rightAlignedVariant"
+        - "gDotRightAligned"
+
+    TranscriptDefinition:
+      type: "object"
+      properties:
+        chr:
+          type: "string"
+          example: "17"
+        start:
+          type: "number"
+          format: "int32"
+        stop:
+          type: "number"
+          format: "int32"
+        transcriptName:
+          type: "string"
+          example: "NM_007294"
+        geneName:
+          type: "string"
+          example: "BRCA1"
+        strand:
+          type: "string"
+          example: "-"
+        cdsStart:
+          type: "number"
+          format: "int32"
+        cdsStop:
+          type: "number"
+          format: "int32"
+        exonStarts:
+          type: "array"
+          items:
+            type: "number"
+            format: "int32"
+        exonStops:
+          type: "array"
+          items:
+            type: "number"
+            format: "int32"
+        exonCodingLengths:
+          type: "array"
+          items:
+            type: "number"
+            format: "int32"
+        exonCount:
+          type: "number"
+          format: "int32"
+        cdsLength:
+          type: "number"
+          format: "int32"
+        aaLength:
+          type: "number"
+          format: "int32"
+        transcriptStatus:
+          type: "string"
+        refSeqGeneId:
+          type: "string"
+        ensemblGeneId:
+          type: "string"
+          example: "ENSG00000012048"
+        proteinId:
+          type: "string"
+          example: "NP_009225"
+        lrgId:
+          type: "string"
+        maneStatus:
+          type: "string"
+          example: "MANE Select"
+        transcriptType:
+          type: "string"
+        firstAlternativeStartCodon:
+          type: "number"
+          format: "int32"
+      required:
+        - "chr"
+        - "start"
+        - "stop"
+        - "transcriptName"
+        - "geneName"
+        - "strand"
+        - "exonStarts"
+        - "exonStops"
+        - "exonCodingLengths"
+        - "exonCount"
+        - "cdsLength"
+        - "aaLength"
+        - "transcriptStatus"
+
+    DefaultTranscriptForGeneResponse:
+      type: "object"
+      properties:
+        transcript:
+          $ref: "#/components/schemas/TranscriptDefinition"
+          type: "object"
+        errorMessage:
+          type: "string"
+
+    GeneTranscriptWithUsage:
+      type: "object"
+      properties:
+        transcript:
+          $ref: "#/components/schemas/TranscriptDefinition"
+          type: "object"
+        clinVarAssessmentsCounts:
+          type: "number"
+          format: "int32"
+      required:
+        - "transcript"
+        - "clinVarAssessmentsCounts"
+
+    GeneTranscriptsResponse:
+      type: "object"
+      properties:
+        transcripts:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/GeneTranscriptWithUsage"
+            type: "object"
+        errorMessage:
+          type: "string"
+      required:
+        - "transcripts"
+
+    VariantTranscript:
+      type: "object"
+      properties:
+        transcript:
+          $ref: "#/components/schemas/TranscriptDefinition"
+          type: "object"
+        isDefaultTranscript:
+          type: "boolean"
+        sequenceOntology:
+          type: "string"
+          example: "missense_variant"
+        geneRegion:
+          type: "string"
+        effect:
+          type: "string"
+        exonNumber:
+          type: "number"
+          format: "int32"
+        exonNumberFivePrime:
+          type: "number"
+          format: "int32"
+        deltaAA:
+          type: "number"
+          format: "int32"
+        refAA:
+          type: "string"
+        altAA:
+          type: "string"
+        physicochemicalDifference:
+          type: "string"
+        refAACoding:
+          type: "string"
+        altAACoding:
+          type: "string"
+        codingDiff:
+          type: "string"
+        distToStopCodon:
+          type: "number"
+          format: "int32"
+        exonBoundaryDist:
+          type: "number"
+          format: "int32"
+        codingPos:
+          type: "number"
+          format: "int32"
+        splicedPos:
+          type: "string"
+        pctCodingDist:
+          type: "number"
+          format: "double"
+        pctCodingCovered:
+          type: "number"
+          format: "double"
+        cDot:
+          type: "string"
+          example: "c.1799T>A"
+        pDot:
+          type: "string"
+          example: "p.V600E"
+        pDotThreeLetter:
+          type: "string"
+          example: "p.Val600Glu"
+        aaStart:
+          type: "number"
+          format: "int32"
+        aaStop:
+          type: "number"
+          format: "int32"
+        repeatAALength:
+          type: "number"
+          format: "int32"
+      required:
+        - "transcript"
+        - "isDefaultTranscript"
+        - "sequenceOntology"
+        - "geneRegion"
+        - "effect"
+        - "distToStopCodon"
+
+    AnnotationSource:
+      type: "object"
+      properties:
+        sourceId:
+          type: "string"
+          description: "The ID of one of the built in sources, e.g. 'gene', 'reference', 'cytoband', 'hpo', 'mondo'"
+        catalogId:
+          type: "string"
+          description: "For workspace-named catalogs, the concrete per-build catalog id (filename stem, e.g. 'GeneLists_GRCh_38'). Empty for non-catalog sources. Use this to query the catalog via ApiCatalogs."
+        series:
+          type: "string"
+          description: "The series name, e.g. 'ClinVar-NCBI'"
+        version:
+          type: "string"
+          description: "The version of the series, e.g. '2025-05-01'. Defaults to latest for that series."
+        sourceUrl:
+          type: "string"
+          description: "The source URL, e.g. 'ClinVar2025-05-01-NCBI_GRCh_37_g1k_Homo_sapiens.tsf:1' from local watched folder."
+        transform:
+          type: "string"
+          description: "The transform function name, e.g. 'filterByExpr'. If this is a wrapper layer."
+        params:
+          type: "object"
+          description: "Transform-specific parameters."
+        transformSources:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/AnnotationSource"
+            type: "object"
+          description: "For recursive wrapping when using a transform function."
+
+    SourceFieldEnum:
+      type: "object"
+      properties:
+        name:
+          type: "string"
+        doc:
+          type: "string"
+      required:
+        - "name"
+
+    SourceField:
+      type: "object"
+      properties:
+        idx:
+          type: "number"
+          format: "int32"
+          description: "Index of this field in the source, -1, -2, -3 for chr, start, stop"
+        name:
+          type: "string"
+          example: "Ref/Alt"
+        symbol:
+          type: "string"
+          example: "refAlt"
+        dataType:
+          type: "string"
+          example: "s"
+        enums:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/SourceFieldEnum"
+            type: "object"
+        doc:
+          type: "string"
+          example: "The reference and alt allele"
+        urlTemplate:
+          type: "string"
+          example: "https://www.ncbi.nlm.nih.gov/clinvar/variation/$$"
+        isIndexed:
+          type: "boolean"
+          example: true
+        isHtmlContent:
+          type: "boolean"
+          example: true
+        props:
+          type: "object"
+        formatFlags:
+          type: "array"
+          items:
+            type: "string"
+      required:
+        - "idx"
+        - "name"
+        - "symbol"
+        - "dataType"
+
+    SourceInfo:
+      type: "object"
+      properties:
+        name:
+          type: "string"
+          example: "ClinVar 2025-05-01, NCBI"
+        url:
+          type: "string"
+        uuid:
+          type: "string"
+        size:
+          type: "number"
+          format: "int32"
+          description: "Size in bytes, -1 if unknown"
+        seriesName:
+          type: "string"
+          example: "ClinVar-NCBI"
+        sourceVersion:
+          type: "string"
+          example: "2025-05-01"
+        description:
+          type: "string"
+        curatedBy:
+          type: "string"
+          example: "NCBI"
+        entityCount:
+          type: "number"
+          format: "int32"
+        locusCount:
+          type: "number"
+          format: "int32"
+        isNetworkSource:
+          type: "boolean"
+          description: "Whether this source is a network/remote source (http, https, ftp, RFS, S3FS)"
+        errMsg:
+          type: "string"
+          description: "Error message if source resolution failed or source is not readable"
+        fields:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/SourceField"
+            type: "object"
+          description: "Only included if requested via includeFields param"
+        coordSysId:
+          type: "string"
+          description: "e.g. Human-GRCh37"
+          example: "Human-GRCh37"
+        featureType:
+          $ref: "#/components/schemas/SourceFeatureType"
+          type: "object"
+          description: "The kind of features this source contains, e.g. TypeGene for gene/transcript tracks or TypeVariant for variant catalogs."
+      required:
+        - "name"
+        - "url"
+        - "isNetworkSource"
+
+    LookupResponse:
+      type: "object"
+      properties:
+        limit:
+          type: "number"
+          format: "int32"
+        offset:
+          type: "number"
+          format: "int32"
+        count:
+          type: "number"
+          format: "int32"
+        hasMore:
+          type: "boolean"
+        took:
+          type: "number"
+          format: "int32"
+        cursor:
+          type: "string"
+          description: "Opaque resume token for stateful paging"
+        warning:
+          type: "string"
+        fields:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/SourceField"
+            type: "object"
+        fieldNames:
+          type: "array"
+          items:
+            type: "string"
+        recordIds:
+          type: "array"
+          items:
+            type: "string"
+        values:
+          type: "array"
+          items:
+            type: "array"
+            items:
+              type: "object"
+        objects:
+          type: "array"
+          items:
+            type: "object"
+      required:
+        - "offset"
+        - "count"
+        - "hasMore"
+        - "took"
+
+    ConfigResponse:
+      type: "object"
+      properties:
+        configGeneSource:
+          type: "string"
+        resolvedGeneSource:
+          type: "string"
+        configReferenceSource:
+          type: "string"
+        resolvedReferenceSource:
+          type: "string"
+      required:
+        - "configGeneSource"
+        - "resolvedGeneSource"
+        - "configReferenceSource"
+        - "resolvedReferenceSource"
+
+    VariantQueryResponse:
+      type: "object"
+      properties:
+        variants:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/RefAltVariant"
+            type: "object"
+        warning:
+          type: "string"
+        error:
+          type: "string"
+      required:
+        - "variants"
+        - "warning"
+        - "error"
+
+    GeneQueryResponse:
+      type: "object"
+      properties:
+        genes:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/GeneDefinition"
+            type: "object"
+        error:
+          type: "string"
+      required:
+        - "genes"
+        - "error"
+
+    CnvQueryResponse:
+      type: "object"
+      properties:
+        cnv:
+          $ref: "#/components/schemas/CopyNumberVariant"
+          type: "object"
+        warning:
+          type: "string"
+        error:
+          type: "string"
+      required:
+        - "warning"
+        - "error"
+
+    BreakendQueryResponse:
+      type: "object"
+      properties:
+        breakends:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/BreakendVariant"
+            type: "object"
+        warning:
+          type: "string"
+        error:
+          type: "string"
+      required:
+        - "breakends"
+        - "warning"
+        - "error"
+
+    RegionQueryResponse:
+      type: "object"
+      properties:
+        region:
+          $ref: "#/components/schemas/GenomicSegment"
+          type: "object"
+        warning:
+          type: "string"
+        error:
+          type: "string"
+      required:
+        - "warning"
+        - "error"
+
+    OntologySearchResult:
+      type: "object"
+      properties:
+        ids:
+          type: "array"
+          items:
+            type: "string"
+          description: "Matched ontology identifiers, e.g. 'HP:0001250' (HPO) or 'MONDO:0011076'."
+        matches:
+          type: "array"
+          items:
+            type: "string"
+          description: "Human-readable disease/phenotype terms matched in the input text."
+      required:
+        - "ids"
+        - "matches"
+
+    ExtractDiseasesAndPhenotypesResponse:
+      type: "object"
+      properties:
+        result:
+          $ref: "#/components/schemas/OntologySearchResult"
+          type: "object"
+        error:
+          type: "string"
+      required:
+        - "result"
+        - "error"
+
+    PredicateNode:
+      type: "object"
+      properties:
+        field:
+          type: "string"
+          example: "classification"
+        op:
+          type: "string"
+          example: "Comparison operator (case-insensitive). Supported operators:\n        - Equality: \"=\", \"eq\", \"equal\", \"equals\"\n        - Not Equal: \"!=\", \"neq\", \"not equal\", \"<>\"\n        - Less Than: \"<\", \"lt\", \"less than\"\n        - Less Than Or Equal: \"<=\", \"lte\", \"less than or equal\"\n        - Greater Than: \">\", \"gt\", \"greater than\"\n        - Greater Than Or Equal: \">=\", \"gte\", \"greater than or equal\"\n        - Starts With: \"starts with\", \"starts\", \"starts_with\"\n        - Ends With: \"ends with\", \"ends\", \"ends_with\"\n        - Contains: \"contains\"\n        - Is Null: \"is null\", \"is_null\"\n        - Is Not Null: \"is not null\", \"is_not_null\"\n        "
+        value:
+          type: "string"
+          example: "Pathogenic"
+      required:
+        - "field"
+        - "op"

@@ -1,0 +1,23 @@
+name: Whoami
+description: Whoami plugin
+icon_name: stethoscope
+retry_count: 3
+retry_delay: 60
+
+agent_requirements:
+  name: Small
+  scheduler_cpu_cost: 1
+  cpu_cores: 4
+  memory_gb: 8
+  description: Opening existing projects or working with small projects
+
+parameters: []
+
+plugin:
+  port: 8080
+  command: '/whoami'
+  args: ['--port=8080']
+  docker:
+    image: traefik/whoami:latest
+    shared_memory_size: 1g
+  env: {}

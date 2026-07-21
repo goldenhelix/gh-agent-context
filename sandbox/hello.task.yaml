@@ -1,0 +1,21 @@
+name: Sandbox Hello
+description: Minimal cmd task — prints a greeting and the workspace id. Used to smoke-test the run loop.
+agent_requirements:
+  cpu_cores: 1
+  memory_gb: 0.1
+  runtime_limit_seconds: 30
+parameters:
+  - name: who
+    label: Who to greet
+    type: string
+    value: world
+    optional: true
+steps:
+  - name: greet
+    description: Print a greeting.
+    type: cmd
+    command: bash
+    args:
+      - |-
+        cd /scratch
+        echo "Hello, ${who}! workspace=$GH_WORKSPACE_ID assembly=$GH_WORKSPACE_ASSEMBLY"
