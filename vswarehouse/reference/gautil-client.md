@@ -11,10 +11,16 @@ so in this session you can run commands with **no auth flags** — just `gautil 
 - The run→poll→log→iterate loop: [`./agent-loop.md`](./agent-loop.md)
 
 ## Ground rules for scripting it
-- **Output format:** add `--output=json` (one document) or `--output=jsonl` (one object per
-  line, pipe to `jq -c`). An **unknown format errors** (exit 2) — never silent. **No results is
-  not an error** (`[]` / empty, exit 0). Diagnostic chatter goes to stderr, so stdout stays
-  clean JSON. `catalog-info`/`catalog-schema` default to `json`.
+- **Always pass `--output` explicitly.** `--output=json` gives one document, `--output=jsonl`
+  one object per line for `jq -c`; both work on every listing and history command. Defaults
+  differ per command and are not worth memorising — naming the format you want costs one flag
+  and keeps a script correct across builds. `catalog-info` and `catalog-schema` emit JSON
+  whether or not you ask.
+- **Failures are loud, so don't muffle them.** An unknown format exits 2; so does an unknown
+  flag (`Unknown argument: --limit=2`). **No results is not an error** (`[]` / empty, exit 0).
+  Diagnostics go to stderr so stdout stays clean JSON — the corollary is that a blanket
+  `2>/dev/null` hides *why* a command produced nothing. Redirect stderr to a file you read on
+  failure, not to `/dev/null`.
 - **Paths are workspace-relative:** `"<location>/<path>"`, first segment is the file location
   (`Documents`, `Catalogs`, `Automation`, `AppData`, ...). List locations with `file-locations`.
 - **This runtime's stdin:** invoke non-interactively (the harness may leave stdin open); the
@@ -115,7 +121,7 @@ messages and final `returnCode`), and `statsPath` (resource samples) — retriev
 | `task-status <id> [--watch]` | Current status; `--watch` polls every 1s until terminal, exits with the task's return code. |
 | `task-log <id> [opts]` | Tail/stream the log. `--streams=all\|stdout\|stderr\|messages`, `--tail=N`, `--follow\|-f`, `--output=text\|jsonl\|logfmt\|raw`. |
 | `task-stats <id> [--watch]` | Resource usage (CPU/mem/IO) as JSONL. |
-| `task-history [--limit] [-q field:op:value]... [--sort=field:dir]` | Past/current runs (default `jsonl`). `task-history-detail` adds params + messages. |
+| `task-history [--limit] [-q field:op:value]... [--sort=field:dir]` | Past/current runs. `task-history-detail` adds params + messages. |
 | `task-paths <id>` | JSON of run/out/err/logIndex/stats paths — pipe into `file-download`. |
 | `task-cancel` / `task-delete` / `task-rename <id> <name>` | Control a run. After `task-delete`, `task-status <id>` still exits `0` and returns a record with `status: deleted` (not a not-found error) — that's how you confirm the delete. |
 
@@ -129,7 +135,7 @@ messages and final `returnCode`), and `statsPath` (resource samples) — retriev
 | `workflow-monitor <id> [--interval=SEC]` | Live stage view (ok/running/errored/pending/total + running & failed tasks). |
 | `workflow-retry <id>` | Retry an incomplete workflow (originally-skipped stages stay skipped). |
 | `workflow-pause` / `workflow-resume` / `workflow-cancel` / `workflow-delete` | Control a run. `workflow-delete` **cascades** — it removes the underlying task-run folders too, so a follow-up `task-delete` on those ids errors with `ENOENT`; that's expected, they're already gone. |
-| `workflow-history [...]` | Past/current runs; `workflow-history-detail` adds per-stage detail. |
+| `workflow-history [--limit] [...]` | Past/current runs; `workflow-history-detail` adds per-stage detail. |
 
 ### Files & locations
 `file-list [<loc>[/<path>]] [patterns]`, `file-stat`, `file-upload`, `file-download`,
@@ -143,7 +149,21 @@ messages and final `returnCode`), and `statsPath` (resource samples) — retriev
 (also `--output=tsv`), `catalog-upsert <id> field=value...` / `catalog-upsert-json`,
 `catalog-import-source`/`catalog-import-tsv`, `catalog-duplicate`/`catalog-backup`/`catalog-restore`,
 `catalog-source-version`/`catalog-set-source-version`, record lifecycle
-(`catalog-record-publish`/`-approve`/`-archive`), `catalog-delete`, `catalog-reload`.
+(`catalog-record-publish`/`-approve`/`-archive`), `catalog-delete`, `catalog-reload`,
+`catalog-approval-count <id>` / `catalog-set-approval-count <id> <count>` (how many
+approvals a record needs), `catalog-rebase-source <id> <loc>/<path> <source_user>
+[baseline_user...] [--additive] [--preview]` (re-cut records against a new authority
+source version; `--preview` returns counts without modifying anything).
+
+### Storage diagnostics
+| Command | Purpose |
+|---|---|
+| `storage-two-view <local_dir> <location>[/<sub_folder>] [options]` | Compare this machine's view of a directory against the server's view of the same bytes. Runs both directions. |
+
+This is the only command that observes **cross-machine staleness**. A single-host write test
+shares one host's caches between its writer and reader, so it can only prove bytes reached the
+server — never that a second machine sees them. Reach for it when a task fails on one agent and
+passes on another, or when a share has been remounted or rebooted underneath a run.
 
 > For the exact, current flag set on the box you're on, run `gautil client` with no arguments
 > (prints the embedded help) or read `/opt/frontend/docs/tools/gautil-client.md`.
