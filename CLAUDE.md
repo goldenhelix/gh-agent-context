@@ -20,7 +20,7 @@ You have a **working `gautil client`** authenticated as the current user via the
 
 ```bash
 gautil client task-list --output=json | jq -r '.[].path'   # what tasks exist here
-gautil client file-locations --output=json | jq -r '.[].id' # valid file-path prefixes
+gautil client file-location-list --output=json | jq -r '.[].id' # valid file-path prefixes
 gautil client catalog-list --output=json | jq -r '.[].id'   # catalogs in this workspace
 ```
 
@@ -41,7 +41,7 @@ etc.); never hard-code them.
 
 `gautil client` also understands `GH_WORKSPACE_URL` (server URL + workspace combined),
 `GH_API_KEY` (service-account key; **session key wins** if both set), and `GH_TIMEOUT` (seconds,
-default 300). The workspace path on the server is `/w/<GH_WORKSPACE_ID>`.
+default 3600). The workspace path on the server is `/w/<GH_WORKSPACE_ID>`.
 
 > The `Automation/` workspace folder is mounted into this agent's filesystem, so the workspace's
 > own tasks/workflows are directly readable/editable here alongside this repo.

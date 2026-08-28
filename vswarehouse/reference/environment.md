@@ -130,7 +130,7 @@ need `{workspaceAdminBot}`. In-container, authenticate a tool with
 
 ## Path gotchas (still worth knowing)
 - **`type: directory` / `type: file` pickers are for workspace locations** (the ones
-  `gautil client file-locations` lists) — they inject as `/w/<workspace>/<location>/…` absolute
+  `gautil client file-location-list` lists) — they inject as `/w/<workspace>/<location>/…` absolute
   paths. Don't hand them arbitrary host paths.
 - A **`type: string` parameter whose value *looks like* a relative path** may be resolved by the
   server to an absolute path before injection; if your script then prepends another base, you get

@@ -34,7 +34,7 @@ Built-in tasks are under the `System/` prefix.
 `--output` on `task-run`). Two idioms:
 ```bash
 # a) capture the id, then poll to a terminal state (exits with the task's returnCode):
-run_id=$(gautil client task-run Tests/hello -p who=agent | head -1)
+run_id=$(gautil client task-run Tests/hello -p who=agent)
 gautil client task-status "$run_id" --output=json --watch
 
 # b) submit + block + stream the log in one call:
@@ -44,10 +44,11 @@ gautil client task-run Tests/hello -p who=agent --follow
   use `task-run-json` only when a value contains commas or is machine-generated.
 - **Quote parameter names with spaces:** `-p "String Array Input=ACGT,TTTT"`.
 - `--wait` blocks and exits with the task's `returnCode`; `--follow` implies `--wait` and also
-  tails the interleaved log.
-- **A missing-required-parameter error exits `0` with an empty run-id line** (validation happens
-  client-side before a run is created) — verify `head -1` gave you a non-empty id, don't trust
-  the exit code alone.
+  tails the interleaved log. `--wait` reports the settled status once, on stderr — stdout stays
+  the run id alone, so `$(...)` captures exactly what you want.
+- **A rejected submit exits non-zero.** A missing required parameter exits `125` with
+  `Missing parameters: <Name>` on stderr and nothing on stdout, so `if gautil client task-run …;
+  then` is a sound test. An unknown task path exits `127`.
 
 ## 3. On failure, read the log (logfmt is best for agents)
 ```bash
