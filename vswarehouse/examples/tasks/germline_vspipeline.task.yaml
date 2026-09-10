@@ -39,7 +39,7 @@ steps:
         echo "Running VSPipeline on ${base_path}"
         cd "${base_path}"
 
-        # Run VSPipeline: create a project, import the VCFs, download required sources, wait for tasks to complete, get the task list, and save the project
+        # Run VSPipeline: create a project, import the VCFs, download required sources, wait for tasks to complete, run saved exports, get the task list, and save the project
         rm -rf "${project_name}"
 
         vcf_files=$(find . -name "*.vcf.gz" -type f | paste -sd ',' - | sed 's/\([^,]*\)/"\1"/g')
@@ -51,6 +51,7 @@ steps:
         import files="${vcf_files}" append_files_with_same_samples=True
         download_required_sources
         task_wait
+        run_saved_exports
         get_task_list
         project_close
         EOF

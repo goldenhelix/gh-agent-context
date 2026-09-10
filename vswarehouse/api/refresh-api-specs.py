@@ -66,14 +66,26 @@ def scrub(body, host, workspace):
 
 
 def curl(url, cookie=None):
-    cmd = ["curl", "-k", "-s", "-H", "accept: application/json"]
+    # -f: fail (nonzero exit) on a 4xx/5xx response instead of returning the error body as
+    # if it were a spec. -S: keep stderr on so a -f failure still reports something.
+    cmd = ["curl", "-k", "-s", "-S", "-f", "-H", "accept: application/json"]
     if cookie:
         cmd += ["-H", f"Cookie: {cookie}"]
     cmd.append(url)
     out = subprocess.run(cmd, capture_output=True, text=True)
     if out.returncode != 0:
-        sys.exit(f"error: curl failed for {url}: {out.stderr.strip()}")
+        sys.exit(f"error: curl failed for {url} (exit {out.returncode}): {out.stderr.strip()}")
     return out.stdout
+
+
+def looks_like_spec(body, is_json):
+    if is_json:
+        try:
+            parsed = json.loads(body)
+        except json.JSONDecodeError:
+            return False
+        return isinstance(parsed, dict) and "paths" in parsed
+    return "\npaths:" in body or body.startswith("paths:")
 
 
 def main():
@@ -115,13 +127,15 @@ def main():
             else:
                 continue
 
-        body = scrub(curl(f"{server}{url}", cookie), host, workspace)
+        is_json = target.endswith(".json")
+        raw = curl(f"{server}{url}", cookie)
+        if not looks_like_spec(raw, is_json):
+            print(f"warning: {name} ({url}) has no 'paths' key, refusing to overwrite {target}", file=sys.stderr)
+            continue
+        body = scrub(raw, host, workspace)
         # pretty-print JSON specs; leave YAML as-is
-        if target.endswith(".json"):
-            try:
-                body = json.dumps(json.loads(body), indent=2) + "\n"
-            except json.JSONDecodeError:
-                pass
+        if is_json:
+            body = json.dumps(json.loads(body), indent=2) + "\n"
         path = os.path.join(HERE, target)
         with open(path, "w") as f:
             f.write(body)

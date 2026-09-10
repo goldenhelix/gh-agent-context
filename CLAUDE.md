@@ -38,13 +38,23 @@ etc.); never hard-code them.
 | `GH_WORKSPACE_ID` | `my_workspace` | The workspace you're operating in. |
 | `GH_SESSION_KEY` | `SESS_…` | Current user's session key — this is why the client acts **as you**. Treat as a secret; never echo or commit it. |
 | `GH_WORKSPACE_ASSEMBLY` | `GRCh_38,Chromosome,Homo sapiens` | Default genome assembly for this workspace (drives `pygautil` coord-sys auto-detection). |
+| `WORKSPACE_DIR` | `/home/ghuser/Workspace` | The mounted workspace root; your persistent area is `$WORKSPACE_DIR/Documents/$USERNAME`. |
+| `USERNAME` | `jdoe` | Your login on this server. |
+| `GH_AI_BASE_URL`, `GH_AI_API_KEY`, `GH_AI_DEFAULT_MODEL`, `GH_AI_MODELS` | — | Set only when workspace AI is enabled: an OpenAI-compatible endpoint and a per-launch key scoped to you, revoked when this agent closes. `GH_AI_MODELS` is comma-separated. Secret; never echo. |
 
 `gautil client` also understands `GH_WORKSPACE_URL` (server URL + workspace combined),
-`GH_API_KEY` (service-account key; **session key wins** if both set), and `GH_TIMEOUT` (seconds,
-default 3600). The workspace path on the server is `/w/<GH_WORKSPACE_ID>`.
+`GH_API_KEY` (service-account key), and `GH_TIMEOUT` (seconds; `gautil client` defaults to
+3600, `ghclient` to 300 — see `gautil client --help` → Environment Variables for authoritative
+semantics). Precedence differs by tool: `gautil client` uses `GH_API_KEY` when both are set;
+`ghclient` uses `GH_SESSION_KEY`. In this container only `GH_SESSION_KEY` is set; don't add
+`GH_API_KEY` to `.vsagent.env` unless you want `gautil` to stop acting as you.
 
-> The `Automation/` workspace folder is mounted into this agent's filesystem, so the workspace's
-> own tasks/workflows are directly readable/editable here alongside this repo.
+> The whole workspace is mounted at `$WORKSPACE_DIR` (`/home/ghuser/Workspace`;
+> `/w/$GH_WORKSPACE_ID` is a symlink to it). Each file location is a subfolder: `Documents/`,
+> `Catalogs/`, `Automation/` (tasks/workflows/plugins/apps), so a workspace path
+> `Documents/x.vcf` is `$WORKSPACE_DIR/Documents/x.vcf` on disk. `Automation/` is read-only
+> unless you are a workspace admin; use `file-upload` or ask an admin to change tasks in place.
+> Your persistent area is `Documents/$USERNAME/`.
 
 ## Tasks vs. workflows
 
@@ -62,8 +72,8 @@ default 3600). The workspace path on the server is `/w/<GH_WORKSPACE_ID>`.
 Running **a task** is this loop — **run → poll → read logs → fix → rerun**:
 
 ```bash
-run_id=$(gautil client task-run <path> -p name=value | head -1)   # task-run prints the run id (first stdout line)
-gautil client task-status "$run_id" --output=json --watch         # poll to terminal; or use --wait/--follow on task-run
+run_id=$(gautil client task-run <path> -p name=value)   # stdout is exactly the run id
+gautil client task-status "$run_id" --watch --output=jsonl   # one status object per poll; exits with the task's return code
 gautil client task-log "$run_id" --output=logfmt --streams=stderr,messages   # read this on failure
 ```
 
@@ -71,7 +81,7 @@ Running **a workflow** is the same loop with the workflow verbs (drive the whole
 into any failed stage's task log):
 
 ```bash
-wf_id=$(gautil client workflow-run <path> -p [<stage>.]name=value | head -1)
+wf_id=$(gautil client workflow-run <path> -p [<stage>.]name=value)   # stdout is exactly the run id
 gautil client workflow-monitor "$wf_id"          # live per-stage view; exits when terminal
 gautil client workflow-preview <path> --trigger  # expand fan-out WITHOUT running (static bases only; see reference)
 ```
@@ -98,8 +108,9 @@ The narrative playbook: [`vswarehouse/reference/agent-loop.md`](./vswarehouse/re
 ## Product docs live on the server (search the `.md`)
 
 The full VS Warehouse documentation is bundled on this server at **`/opt/frontend/docs/`**
-(~53 Markdown files). This repo intentionally does **not** copy the docs mirror — the server
-copy is always version-matched. To find something, grep the Markdown:
+(`find /opt/frontend/docs -name '*.md'` for the live list). This repo intentionally does **not**
+copy the docs mirror — the server copy is always version-matched. To find something, grep the
+Markdown:
 
 ```bash
 grep -rl "keyword" /opt/frontend/docs --include='*.md'
@@ -107,7 +118,7 @@ grep -rl "keyword" /opt/frontend/docs --include='*.md'
 
 Useful entry points: `docs/getting-started.md`, `docs/api-docs.md`,
 `docs/workspaces/automation/` (tasks, workflows, triggers, plugins),
-`docs/workspaces/{catalogs,file-management,annotations,applications}.md`,
+`docs/workspaces/{catalogs,file-management,interpretation-configuration,applications,ai-assistance}.md`,
 `docs/workspaces/workspace-management/`, `docs/tools/` (gautil, gautil-client, ghclient,
 pygautil), `docs/management/admin/`, `docs/deployment/`.
 
@@ -117,9 +128,9 @@ pygautil), `docs/management/admin/`, `docs/deployment/`.
 |---|---|
 | `/opt/frontend/docs/**/*.md` | Product documentation (version-matched). |
 | `/opt/backend/tasks/` | Built-in `System/` tasks. Indexed: [`server-index/built-in-tasks.md`](./server-index/built-in-tasks.md). |
-| `/opt/backend/workspace-schemas/` | `task.json` / `workflow.json` / `application.json` validation schemas. |
+| `/opt/backend/workspace-schemas/` | `task.json` / `workflow.json` / `application.json` / `plugin.json` validation schemas. |
 | `/opt/server_templates/workspaces/*/Automation/` | Shipped example tasks/workflows/plugins/apps. Indexed: [`server-index/server-templates.md`](./server-index/server-templates.md). |
-| `/opt/apiserver/` | `gautil` binary, `pygautil`, `ghclient` (set `PYTHONPATH=/opt/apiserver` for the Python libs). |
+| `/opt/apiserver/` | `gautil` binary, `pygautil`, `ghclient` (already on `PATH` and `PYTHONPATH`; use plain `python3`, which is the 3.10 build `pygautil` is compiled for — do not call `/usr/bin/python3`). |
 | `/opt/frontend/dist/version.json` | The version **this container** was bundled from. |
 
 ## Version awareness
@@ -145,6 +156,7 @@ curl -s "$GH_SERVER_URL/version.json"        # the version the HOST server repor
 2. **Ground on the worked examples and the field notes** before authoring from scratch —
    prefer adapting a shipped example (`server-index/` → copy → edit) over greenfield YAML.
 3. **Run the loop to green.** Submit, watch, read stderr+messages on failure, fix the exact
-   parameter/path, rerun. Don't declare success without a terminal `complete`/return code 0.
-4. **Keep secrets safe.** `GH_SESSION_KEY` and workspace secrets are credentials — never echo
-   them into logs, files, or task descriptions.
+   parameter/path, rerun. Don't declare success without a terminal `completed` status / return
+   code 0 (terminal states: completed, failed, canceled, deleted, skipped).
+4. **Keep secrets safe.** `GH_SESSION_KEY`, `GH_AI_API_KEY`, and workspace secrets are
+   credentials — never echo them into logs, files, or task descriptions.

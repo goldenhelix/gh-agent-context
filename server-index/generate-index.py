@@ -17,6 +17,88 @@ import os
 import sys
 import glob
 
+
+def _parse_scalar(s):
+    s = s.strip()
+    if not s or s in ("null", "None", "~"):
+        return None
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ("'", '"'):
+        return s[1:-1]
+    if s in ("true", "True", "yes", "Yes"):
+        return True
+    if s in ("false", "False", "no", "No"):
+        return False
+    try:
+        return int(s)
+    except ValueError:
+        pass
+    try:
+        return float(s)
+    except ValueError:
+        pass
+    return s
+
+
+def _stdlib_load_yaml(path):
+    """Extract name, description, parameters[].{name,type,optional,list} and
+    stages[].name using only the stdlib, for boxes with neither ruamel.yaml nor
+    PyYAML installed. Not a general YAML parser."""
+    result = {}
+    section = None
+    item = None
+    item_indent = None
+
+    def flush():
+        if item is not None:
+            result.setdefault(section, []).append(item)
+
+    with open(path) as f:
+        lines = f.readlines()
+
+    for raw in lines:
+        line = raw.rstrip("\n")
+        if not line.strip() or line.strip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        content = line.strip()
+
+        if indent == 0:
+            flush()
+            item = None
+            section = None
+            key, sep, rest = content.partition(":")
+            if not sep:
+                continue
+            key = key.strip()
+            rest = rest.strip()
+            if key in ("name", "description") and rest:
+                result[key] = _parse_scalar(rest)
+            elif key in ("parameters", "stages"):
+                section = key
+                result.setdefault(section, [])
+            continue
+
+        if section is None:
+            continue
+
+        if content.startswith("- "):
+            flush()
+            item = {}
+            item_indent = indent
+            content = content[2:]
+            if ":" in content:
+                k, _, v = content.partition(":")
+                item[k.strip()] = _parse_scalar(v.strip())
+            continue
+
+        if item is not None and indent == item_indent + 2 and ":" in content:
+            k, _, v = content.partition(":")
+            item[k.strip()] = _parse_scalar(v.strip())
+
+    flush()
+    return result
+
+
 try:
     from ruamel.yaml import YAML
 
@@ -26,11 +108,14 @@ try:
         with open(path) as f:
             return _yaml.load(f)
 except Exception:  # pragma: no cover - fallback if ruamel missing
-    import yaml as _pyyaml
+    try:
+        import yaml as _pyyaml
 
-    def load_yaml(path):
-        with open(path) as f:
-            return _pyyaml.safe_load(f)
+        def load_yaml(path):
+            with open(path) as f:
+                return _pyyaml.safe_load(f)
+    except Exception:  # pragma: no cover - neither ruamel.yaml nor PyYAML installed
+        load_yaml = _stdlib_load_yaml
 
 BUILTIN_TASKS_DIR = "/opt/backend/tasks"
 TEMPLATE_ROOTS = sorted(glob.glob("/opt/server_templates/workspaces/*/Automation"))
@@ -40,7 +125,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 def one_line(text):
     if not text:
         return ""
-    return " ".join(str(text).split()).strip()
+    return " ".join(str(text).split()).strip().replace("|", "\\|")
 
 
 def summarize_params(doc):
@@ -51,8 +136,9 @@ def summarize_params(doc):
             continue
         n = p.get("name", "?")
         t = p.get("type", "?")
+        arr = "[]" if p.get("list") else ""
         opt = "?" if p.get("optional") else ""
-        names.append(f"{n}:{t}{opt}")
+        names.append(f"{n}:{t}{arr}{opt}")
     return ", ".join(names)
 
 
@@ -89,14 +175,6 @@ def scan_dir(root, kinds):
     return rows
 
 
-TASK_KINDS = {
-    ".task.yaml": "task",
-    ".workflow.yaml": "workflow",
-    ".plugin.yaml": "plugin",
-    ".application.yaml": "application",
-}
-
-
 def write_builtin():
     rows = scan_dir(BUILTIN_TASKS_DIR, {".task.yaml": "task"})
     out = [
@@ -125,35 +203,64 @@ def write_templates():
         "",
         "Tasks, workflows, plugins, and applications shipped as **workspace templates** on",
         "this server. They are the best worked examples to copy from: each is a real,",
-        "runnable definition. To use one, copy it into your workspace's `Automation/` tree",
-        "(or read it in place with `Read`), then adapt.",
+        "runnable definition.",
         "",
         "Source on this server:",
     ]
     for root in TEMPLATE_ROOTS:
         out.append(f"- `{root}/`")
     out.append("")
-    out.append("Regenerate with `server-index/generate-index.py`.")
+    out.append(
+        "Each template's `Automation/` tree has `Workflows/` (tasks and workflows),"
+    )
+    out.append(
+        "`Applications/`, and `Plugins/` subfolders; that folder name is what the"
+    )
+    out.append("server discovers each definition as.")
     out.append("")
-
-    total = 0
-    for root in TEMPLATE_ROOTS:
-        rows = scan_dir(root, TASK_KINDS)
-        total += len(rows)
-        ws = root.split("/workspaces/")[-1].split("/")[0]
-        out.append("")
-        out.append(f"## Workspace template: `{ws}`")
-        out.append("")
-        out.append("| Kind | File | Name | Stages / Params | Description |")
-        out.append("|---|---|---|---|---|")
-        for kind, rel, full, name, desc, extra in sorted(
-            rows, key=lambda r: (r[0], r[1])
-        ):
-            out.append(
-                f"| {kind} | `{full}` | {name} | {extra or '—'} | {desc} |"
-            )
+    out.append(
+        "`core` is copied into every new workspace's `Automation/` tree by default"
+    )
+    out.append(
+        "when the workspace is created (`ghadmin workspace-create`, opt out with"
+    )
+    out.append(
+        "`--no-core`), so its Applications and Plugins are already present there,"
+    )
+    out.append(
+        "not something you need to copy in yourself. `example` and `test` are"
+    )
+    out.append("opt-in template folders you copy from explicitly.")
     out.append("")
-    out.append(f"_{total} template definitions indexed across {len(TEMPLATE_ROOTS)} workspace template(s)._")
+    out.append(
+        "Application and plugin *definitions themselves* (like VSAgent's) live in"
+    )
+    out.append(
+        "the versioned application/plugin registry, not in a workspace template;"
+    )
+    out.append(
+        "they're installed into a workspace with the built-in `System/application_checkout`"
+    )
+    out.append("and `System/plugin_checkout` tasks.")
+    out.append("")
+    out.append(
+        "Since this tree changes with each release, don't rely on a stale mirror of"
+    )
+    out.append("it here. Enumerate what's actually on the server:")
+    out.append("")
+    out.append("```sh")
+    out.append("ls -R /opt/server_templates/workspaces/*/Automation")
+    out.append("gautil client task-list                 # includes the built-in System/ tasks")
+    out.append("gautil client task-list --path=<prefix>")
+    out.append("```")
+    out.append("")
+    out.append(
+        "Read a definition in place (`Read /opt/server_templates/workspaces/<template>/Automation/...`)"
+    )
+    out.append(
+        "to see its parameters and description before copying it into your own"
+    )
+    out.append("workspace's `Automation/` tree and adapting it.")
     return "\n".join(out) + "\n"
 
 

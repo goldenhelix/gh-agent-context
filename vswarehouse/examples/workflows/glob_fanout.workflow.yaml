@@ -7,7 +7,7 @@ description: >-
 stages:
   # Stage 1: produce N files into a workspace location and emit that directory downstream.
   - name: Generate
-    task_path: ./generate_files.task.yaml
+    task_path: ../tasks/generate_files.task.yaml
     task_parameters:
       - name: output_dir
         label: Output Directory
@@ -20,14 +20,16 @@ stages:
 
   # Stage 2: fan out — one instance of process_file per *.txt the Generate stage created.
   - name: Process
-    task_path: ./process_file.task.yaml
+    task_path: ../tasks/process_file.task.yaml
     depends_on: [ Generate ]
     glob_parameter:
       path:
         type: stage
         stage: Generate
         # GOTCHA 1: inside glob_parameter.path this key is `parameter` /
-        # `parameter_expression` — NOT `stage_parameter` (which silently yields 0 instances).
+        # `parameter_expression` (a `stage_parameter` here is ignored, and the stage then
+        # fails with "Failed to resolve workflow parameter: either 'parameterName' or
+        # 'parameterExpression' must be set").
         # GOTCHA 2: `gen_dir` is emitted by Generate as a WORKSPACE-RELATIVE path
         # (absolute /w/<ws>/... bases fail to glob).
         parameter_expression: '${gen_dir}'

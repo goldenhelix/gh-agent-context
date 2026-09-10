@@ -1,3 +1,10 @@
+# This is a stub, not a runnable example: task_path and path.file are placeholders.
+# For a real, runnable batch_file_parameter workflow, copy the shipped original from
+# /opt/server_templates/workspaces/test/Automation/Workflows/UnitTests/batch_file.workflow.yaml
+# (test.task.yaml sits alongside it in that folder) — see server-index/server-templates.md.
+#
+# GOTCHA: the batch file's delimiter is inferred from its resolved path: '.csv' means
+# comma-separated, anything else (including '.tsv' or no extension) means tab-separated.
 name: Batch File Parameter Test
 description: Tests batch_file_parameter functionality with retry capabilities to verify batch processing of multiple parameter sets from a file
 stages:

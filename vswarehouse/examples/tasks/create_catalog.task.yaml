@@ -111,6 +111,13 @@ parameters:
     value: 'true'
     group: 'Interpretation Configuration Catalogs'
 
+  - name: update_legacy_gene_catalogs
+    label: Import Updated Legacy Gene Files
+    help: Import legacy gene preferences and gene lists whose contents have changed since their last successful import. This may replace edits in existing gene catalogs.
+    type: boolean
+    value: 'false'
+    group: 'Interpretation Configuration Catalogs'
+
   - name: vsclinical_acmg_catalogs
     label: ACMG Catalogs
     help: Create the VSClinical ACMG catalogs
@@ -200,6 +207,7 @@ steps:
             --create-amp="${vsclinical_amp_catalogs}" \
             --create-gene-list="${gene_list_catalog}" \
             --create-gene-preferences="${gene_preferences_catalog}" \
+            --update-legacy-gene-catalogs="${update_legacy_gene_catalogs}" \
             --add-sample-fields="${COMBINED_FIELDS}" \
             --sample-catalog-id="${sample_catalog_id}" \
             --sample-catalog-name="${sample_catalog_name}" \

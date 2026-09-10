@@ -63,6 +63,299 @@ paths:
                 items:
                   $ref: "#/components/schemas/CatalogTemplate"
                   type: "object"
+  /source/{catalogId}/file:
+    post:
+      operationId: "catalogFileUpload"
+      summary: "Store a file in the catalog and return its id"
+      description: "Stores the request body as a file inside the catalog and returns its id, which is the value to write into a file or fileList field. Content is addressed by hash, so uploading bytes the catalog already holds stores no second copy. The whole file travels in one request body and must be within the catalog file size limit. The returned file is referenced by no record until one is written naming it, and an unreferenced file is eventually collected."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "fileName"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "variant_report.pdf"
+            description: "Name to store the file under, as shown to a reader"
+          description: "Name to store the file under, as shown to a reader"
+          example: "variant_report.pdf"
+
+        - name: "contentType"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "application/pdf"
+            description: "MIME type of the content, validated against the bytes actually sent"
+          description: "MIME type of the content, validated against the bytes actually sent"
+          example: "application/pdf"
+
+      requestBody:
+        required: "true"
+        content:
+          application/octet-stream: {}
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogFileInfo"
+                type: "object"
+  /source/{catalogId}/file/upload:
+    post:
+      operationId: "catalogFileUploadBegin"
+      summary: "Start a chunked upload and return the file's id"
+      description: "Allocates a file of the declared size whose bytes arrive in chunks. Until the upload is finished the file is incomplete: a draft may reference it, its content cannot be read, and a record referencing it cannot be published. An upload never finished is collected after a grace period. Use this above the single-request comfort zone; small files can use the single-request upload."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "fileName"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "panel_run.pdf"
+            description: "Name to store the file under, as shown to a reader"
+          description: "Name to store the file under, as shown to a reader"
+          example: "panel_run.pdf"
+
+        - name: "contentType"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "application/pdf"
+            description: "MIME type of the content, validated against the bytes at finish"
+          description: "MIME type of the content, validated against the bytes at finish"
+          example: "application/pdf"
+
+        - name: "size"
+          in: "query"
+          required: true
+          schema:
+            type: "number"
+            format: "int32"
+            example: 52428800
+            description: "Total size in bytes; the chunks must fill exactly this extent"
+          description: "Total size in bytes; the chunks must fill exactly this extent"
+          example: 52428800
+
+      requestBody:
+        required: "true"
+        content:
+          application/octet-stream: {}
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogFileInfo"
+                type: "object"
+  /source/{catalogId}/file/{fileId}/content:
+    post:
+      operationId: "catalogFileUploadChunk"
+      summary: "Write one chunk of an in-flight upload"
+      description: "Writes the request body into the file at the given offset. Chunks may arrive in any order and a failed chunk may simply be sent again. Only the user who began the upload may write to it, and only while it is unfinished."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "fileId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "offset"
+          in: "query"
+          required: true
+          schema:
+            type: "number"
+            format: "int32"
+            example: 8388608
+            description: "Byte offset this chunk starts at"
+          description: "Byte offset this chunk starts at"
+          example: 8388608
+
+      requestBody:
+        required: "true"
+        content:
+          application/octet-stream: {}
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogFileInfo"
+                type: "object"
+  /source/{catalogId}/file/{fileId}/finish:
+    put:
+      operationId: "catalogFileUploadFinish"
+      summary: "Verify and publish a chunked upload"
+      description: "Declares the upload complete. The server hashes what actually arrived and compares it to the sha256 the client computed, so a lost or corrupted chunk fails here rather than becoming silent zeros in the stored file. Repeating a finish with the same hash succeeds, so a lost response is safely retried. Only the user who began the upload may finish it."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "fileId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "sha256"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+            description: "Hash of the whole content, 64 hex characters"
+          description: "Hash of the whole content, 64 hex characters"
+          example: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogFileInfo"
+                type: "object"
+  /source/{catalogId}/file/{fileId}/upload:
+    delete:
+      operationId: "catalogFileUploadAbort"
+      summary: "Abandon an in-flight upload"
+      description: "Removes an unfinished upload: its identity, its allocated space, and any reference a draft already made to it. Refused on a finished file, whose removal is an ordinary record edit or an expunge. Only the user who began the upload may abort it."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:write"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "fileId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "object"
+  /source/{catalogId}/file/{fileId}:
+    get:
+      operationId: "catalogFileDownload"
+      summary: "Download a stored file's bytes"
+      description: "Return the bytes of one stored file. Readable only through a record that references the file and that the caller can read, so a file no record names is not readable at all. Content outside a small displayable allowlist is returned as an attachment rather than rendered in place. Supports byte ranges, so a viewer can seek within a large file without fetching all of it."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "fileId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/binary"
+                type: "object"
+  /source/{catalogId}/file/{fileId}/expunge:
+    put:
+      operationId: "catalogFileExpunge"
+      summary: "Destroy a stored file's content, keeping its identity"
+      description: "Destroys the bytes of one stored file while leaving every record that references it intact. This is not a delete: the file's name, type and size remain so earlier versions of a record stay readable and honest about what they held, downloads report the content as gone, and the reference rows are untouched. Removing a file from a record is an ordinary edit and does not need this; this is for content that must not exist, such as data filed against the wrong record. It cannot be undone, and it affects every record referencing the file rather than only the current one. Requires catalog:manage."
+      x-agent-expose: "hidden"
+      x-agent-permission: "catalog:manage"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "fileId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogFileInfo"
+                type: "object"
+  /source/{catalogId}/file/{fileId}/info:
+    get:
+      operationId: "catalogFileInfo"
+      summary: "Get the name, type and size of a stored file"
+      description: "Return one stored file's metadata without its bytes. Readable only through a record that references the file and that the caller can read. Fetch the bytes from the same route without the trailing info segment."
+      x-agent-permission: "catalog:read"
+      parameters:
+        - name: "catalogId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "fileId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogFileInfo"
+                type: "object"
   /about/:
     get:
       operationId: "catalogApiAbout"
@@ -245,7 +538,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ExpressionNode"
-          description: "Optional filter, as an ExpressionNode object. A predicate is {op, field, value} where op is a word from OperatorType (Equals, NotEquals, Substring, StartsWith, EndsWith, LessThan, GreaterThan, IsNull, \u2026 \u2014 never a symbol like ==) and field is a field symbol from catalogSchema; combine predicates with {op: And|Or|Not, children: [ \u2026 ]}. Example: {\"op\": \"Equals\", \"field\": \"Sample\", \"value\": \"Imported Variants\"}."
+          description: "Optional filter, as an ExpressionNode object. A predicate is {op, field, value} where op is a word from OperatorType (Equals, NotEquals, Substring, StartsWith, EndsWith, LessThan, GreaterThan, IsNull, \u2026 \u2014 never a symbol like ==) and field is a field symbol from catalogSchema; combine predicates with {op: And|Or|Not, children: [ \u2026 ]}. Example: {\"op\": \"Equals\", \"field\": \"Sample\", \"value\": \"Imported Variants\"}. The META_* record-metadata symbols filter with special rules: META_STATUS takes only Equals with value \"published\", \"approved\", or \"draft\" (e.g. {\"op\": \"Equals\", \"field\": \"META_STATUS\", \"value\": \"draft\"} for drafts only); META_ASSIGNED_TO_USER_ID (assignee) takes only Equals with a user id; META_USER_ID (record author) takes Equals, NotEquals, or Substring; META_USER_NAME is not filterable. A user id is the identity listed by catalogUsersList (for server users, their email address). \"Drafts assigned to me\" is the And of the status and assignment predicates. Assignments live on DRAFT record versions (assigning a published record creates a draft), so a META_ASSIGNED_TO_USER_ID filter matches nothing under the default queryMode (LatestPublishedRecord): pass queryMode=LatestActiveRecord, or And the assignment predicate with the draft status predicate. An id not recorded in the catalog also matches zero records without an error, so verify the id via catalogUsersList rather than concluding from an empty result."
 
         - name: "orderby"
           in: "query"
@@ -255,6 +548,8 @@ paths:
             items:
               $ref: "#/components/schemas/FieldSort"
               type: "object"
+            description: "Sort order, as a list of {field, direction} objects applied outermost first, where direction is Ascending or Descending. field is a field symbol from catalogSchema (read it first, do not guess), and the META_* record-metadata symbols sort as well. Example: [{\"field\": \"META_DATE\", \"direction\": \"Descending\"}] for most-recently-edited first. Unsorted, records come back in catalog order."
+          description: "Sort order, as a list of {field, direction} objects applied outermost first, where direction is Ascending or Descending. field is a field symbol from catalogSchema (read it first, do not guess), and the META_* record-metadata symbols sort as well. Example: [{\"field\": \"META_DATE\", \"direction\": \"Descending\"}] for most-recently-edited first. Unsorted, records come back in catalog order."
 
         - name: "limit"
           in: "query"
@@ -312,6 +607,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogQueryMode"
+          description: "Which record versions the operation sees. The default LatestPublishedRecord returns only the latest published version of each record \u2014 drafts, and the assignments that live on them, are invisible. LatestActiveRecord returns each record's latest draft or published version (the working set, what the catalog UI shows). RecordActivity returns every version including archived."
 
         - name: "enableCursor"
           in: "query"
@@ -555,45 +851,6 @@ paths:
                 approvalCount:
                   type: "number"
                   format: "int32"
-      responses:
-        200:
-          description: "Success"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CatalogInfo"
-                type: "object"
-  /source/{catalogId}/createFromShippedFile:
-    post:
-      operationId: "catalogCreateFromShippedFile"
-      summary: "Create a new catalog by copying a shipped .catalog file"
-      description:
-        - "Locates a shipped catalog file (e.g. GenePreferences.catalog) in the"
-        - "apiserver's Data directory, copies it into the workspace's catalogs"
-        - "path under the given catalogId, and registers it with the catalog"
-        - "service in-process so it is immediately usable. Returns 409 if a"
-        - "catalog with that id already exists in the workspace."
-      x-agent-expose: "progressive"
-      x-agent-permission: "catalog:manage"
-      parameters:
-        - name: "catalogId"
-          in: "path"
-          required: true
-          schema:
-            type: "string"
-
-      requestBody:
-        required: "true"
-        content:
-          application/json:
-            schema:
-              type: "object"
-              required:
-                - "sourceFile"
-              properties:
-                sourceFile:
-                  type: "string"
-                  example: "GenePreferences.catalog"
       responses:
         200:
           description: "Success"
@@ -2128,10 +2385,10 @@ paths:
   /source/{catalogId}/expunge/{recordId}:
     post:
       operationId: "catalogRecordExpunge"
-      summary: "Permanently delete a catalog record"
-      description: "Destructive and irreversible. Permanently removes a record version from the catalog, including its history. Requires expunge permission."
+      summary: "Permanently delete a catalog record and all of its versions"
+      description: "Destructive and irreversible. Removes every version of the record, along with its history, its index entries and the file references those versions held. The record must already be archived, so archive it with catalogRecordArchive first. Errors if the record's latest version is a pending change (Draft, Approved or DraftArchive) rather than an archive, so cancel or resolve the pending change first. Prefer catalogRecordArchive on its own, which keeps the record readable as history. Requires manage permission, the same permission that deletes a whole catalog."
       x-agent-expose: "hidden"
-      x-agent-permission: "catalog:expunge"
+      x-agent-permission: "catalog:manage"
       parameters:
         - name: "catalogId"
           in: "path"
@@ -2151,11 +2408,7 @@ paths:
           application/json:
             schema:
               type: "object"
-              required:
-                - "historyId"
-              properties:
-                historyId:
-                  type: "string"
+              properties: {}
       responses:
         200:
           description: "Success"
@@ -2566,6 +2819,40 @@ paths:
                 type: "string"
 components:
   schemas:
+    CatalogFileInfo:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          description: "The file's identity: 32 hex characters, stable across export, import and copy"
+          example: "3f2a9c4be1d84f7c9a0b6d5e8f1c2a3b"
+        name:
+          type: "string"
+          example: "variant_report.pdf"
+        contentType:
+          type: "string"
+          example: "application/pdf"
+        size:
+          type: "number"
+          format: "int32"
+          description: "Size of the stored content in bytes"
+          example: 48213
+        complete:
+          type: "boolean"
+          description: "False while content is still arriving; only drafts may reference such a file"
+          example: true
+        expunged:
+          type: "boolean"
+          description: "True when the content has been destroyed and only the identity remains"
+          example: false
+      required:
+        - "id"
+        - "name"
+        - "contentType"
+        - "size"
+        - "complete"
+        - "expunged"
+
     CatalogApiInfo:
       type: "object"
       properties:
@@ -2624,6 +2911,12 @@ components:
           type: "object"
         errorMessage:
           type: "string"
+
+    CatalogFileKind:
+      type: "string"
+      enum:
+        - "File"
+        - "FileList"
 
     CatalogFieldMeta:
       type: "object"

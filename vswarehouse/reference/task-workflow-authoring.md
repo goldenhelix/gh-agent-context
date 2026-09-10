@@ -4,19 +4,28 @@ Distilled, load-bearing conventions for writing `*.task.yaml` / `*.workflow.yaml
 **authoritative field references** are the server's own docs — read them for the full option
 list — and the **validation schemas** are the contract:
 
-- Field docs (server): `/opt/frontend/docs/workspaces/automation/task-details.md`,
-  `.../workflow-details.md`, `.../triggers-and-schedules.md`, `.../plugins.md`
-- Schemas (version-matched, server-local): `/opt/backend/workspace-schemas/{task,workflow,application}.json`
-- Static schema copies (this repo): [`../schemas/`](../schemas/)
+- Field reference for both file types (server): `/opt/frontend/docs/workspaces/automation/workflow-details.md`.
+  Related guides: `task-details.md` (running/monitoring a task), `workflows.md` +
+  `triggers-and-schedules.md` (running, schedules, triggers), `troubleshooting.md`,
+  `plugins.md` (plugin container runtime contract, not YAML fields)
+- Schemas (version-matched, server-local): `/opt/backend/workspace-schemas/{task,workflow,application,plugin}.json`
+- Static schema copies (this repo): [`../schemas/`](../schemas/) — these lag the server: `task.json`
+  here predates `status_message` / `auto_generate_ai_key_for_account` and, with
+  `additionalProperties: false`, will reject them. Always prefer the server's
+  `/opt/backend/workspace-schemas/*.json` when you are running on a server.
 - Worked examples: [`../examples/`](../examples/) and the
   on-server template index in [`../../server-index/server-templates.md`](../../server-index/server-templates.md)
 
-**Always validate against the schema before submitting.** The server also validates at submit
-time, so a quick path is to just submit and read the error — but catching it locally is faster.
-Note the agent runtime ships `ruamel.yaml` but **not** `jsonschema` or `pyyaml`, so the obvious
-one-liner may not run; reliable options: diff your YAML against the closest
-[`../examples/`](../examples/) file, or load the schema JSON with `json` + `ruamel.yaml` and
-check each object against its `required` / `additionalProperties` by hand.
+**Always validate against the schema before submitting.** Submit-time validation catches missing
+required fields, wrong types, and bad enum values, but **not** unknown or misspelled keys: the
+server's own validators set no `additionalProperties`. The exported schemas under
+`/opt/backend/workspace-schemas/` do have `additionalProperties: false`, so validating locally
+against those is the only way to catch a typo'd key (the glob `stage_parameter` trap below is
+one). Note the agent runtime ships `ruamel.yaml` but **not** `jsonschema` or `pyyaml`, so the
+obvious one-liner may not run; reliable options: diff your YAML against the closest
+[`../examples/`](../examples/) file, load the schema JSON with `json` + `ruamel.yaml` and check
+each object against its `required` / `additionalProperties` by hand, or use the built-in editor
+(its YAML schema mapping already points at those files).
 
 ## Task YAML — required top-level fields
 `name`, `parameters`, `steps`, `agent_requirements`.
@@ -32,6 +41,7 @@ description: |-
   This task is run by the "My Workflow" workflow — don't run it directly.
 
 auto_generate_session_for_account: "{user}"   # optional; see environment.md
+status_message: "Processing ${sample_name:-all samples}"   # optional; shown while running, supports ${param} / ${param:-fallback}
 
 agent_requirements:
   cpu_cores: 2
@@ -66,9 +76,17 @@ steps:
         cd /scratch
         python3 "$TASK_DIR/script.py" --out "${output_dir}"
 ```
+Every step requires `name`, `description`, `type`; every stage requires `name` and `task_path`.
+Also optional at the task level: `env_file` (a dotenv file, loaded relative to the task file) and
+`auto_generate_ai_key_for_account` (mints a scoped OpenAI-compatible key for the run:
+`GH_AI_BASE_URL`, `GH_AI_API_KEY`, `GH_AI_DEFAULT_MODEL`, `GH_AI_MODELS`, revoked when the run ends).
 
 ### Parameter notes
-- `${param_name}` substitutes the value into `command` / `args`.
+- Parameters arrive as **environment variables** (non-word characters in the name become `_`; a
+  `list: true` value is comma-joined). In a `cmd` step (`command` defaults to `bash`) the shell
+  does the expansion, the server does not interpolate, so a misspelled `${foo}` silently becomes
+  empty; quote every use. The server only interpolates `${param}` into `command`/`args` when
+  `command` is not `bash` (typical `type: docker` steps).
 - `type: enum` needs a `choices:` list; add `list: true` for multi-select. `list: true` also
   works on `string`/`file` for multi-value inputs.
 - `type: file` / `type: directory` render a picker over **workspace locations**; add
@@ -82,18 +100,11 @@ steps:
   need); use `read_write` only on a parameter the task actually writes to.
 - **Give every parameter a `label` and a `help`.** Both render in the run dialog; `help` is where
   you explain accepted values/format (the shipped tasks put filter-expression syntax there).
-- `path:` on a `file`/`directory` parameter sets the **picker's default location**
-  (e.g. `path: AppData/Common Data/UserAnnotations/cohorts`) — point operators at the right folder.
-- `create: true` on a `file` parameter lets the operator **name a not-yet-existing** output file.
-- `persist_key: 'ns.key'` remembers the entered value as a workspace default for next time; use a
-  dotted namespace (`cohorts.input_directory`) to avoid collisions.
-- `group: 'Advanced Options'` collapses less-common parameters into a section.
-- `type: catalog` — a parameter that selects a workspace catalog by id (see
-  [`ghclient-notes.md`](./ghclient-notes.md) / `gautil client catalog-list`).
-- `type: secret` — per-run credential, prompted at run time, never logged. For pipeline-wide
-  secrets prefer **workspace secrets** (auto-injected env vars — see
-  [`environment.md`](./environment.md)).
-- `editable: false` disables an input; `optional: true` allows it empty; `value:` sets a default.
+- For the rest of the per-field catalogue (`path:` picker default, `create:`, `persist_key:`,
+  `group:`, `type: catalog`, `type: secret`, `editable:`, and more), see
+  `/opt/frontend/docs/workspaces/automation/workflow-details.md` (`## Parameters`). Workspace
+  secrets (auto-injected env vars, not `type: secret`) are covered in
+  [`environment.md`](./environment.md).
 - `$TASK_DIR` inside a step resolves to the **task file's own directory** — use it to reach
   helper scripts by a path relative to the task, which is far more robust than an absolute one.
   With the recommended layout (tasks in `tasks/`, scripts in `scripts/`), that's
@@ -141,12 +152,17 @@ stages:
   flows between stages. `stage_parameter: <name>` names either the upstream stage's own
   parameter **or a `result.env` variable it emitted** (see below);
   `stage_parameter_expression` computes one from those + the upstream inputs.
-- Fan-out patterns (one task instance per input): **glob** (`glob_parameter`), **batch CSV**
-  (`batch_file_parameter`, one row per instance), **parameter file** (`parameter_file`). See the
-  **Fan-out** section below.
-- `run_step: optional_default_skip` exposes a stage in the UI but leaves it unchecked by
-  default (e.g. a force-re-run step). `retry_count: N` retries a failed stage up to N times
-  (put it on flaky network stages).
+- Fan-out (one task instance per input): **glob** (`glob_parameter`) and **batch CSV**
+  (`batch_file_parameter`, one row per instance). `parameter_file` is NOT fan-out: it injects
+  `key=value` pairs into a single stage run. See the **Fan-out** section below.
+- `run_step: optional_default_skip` leaves a stage unchecked in the **run dialog**.
+  `gautil client workflow-run` does not honour it: the client sends every stage and the server
+  treats a stage sent without a `runStep` as `always`, so pass `--skip=<stage>` (or
+  `-s <stage>.runStep=OptionalDefaultSkip`) explicitly from the CLI; `--include=<stage>` opts one
+  in. `retry_count: N` retries a failed stage up to N times (put it on flaky network stages).
+- `run_on_dependency_failure: true` runs a stage even when a `depends_on` stage failed or was
+  canceled (it still waits for them). Use it for a report/cleanup stage; `type: stage` parameters
+  pointing at the failed stage resolve to defaults/empty.
 - **A stage only exposes a task parameter to `workflow-run -p` (and the run dialog) if the stage
   restates it in `task_parameters`.** Omit it and the stage silently runs with the task's
   **defaults** — a real footgun when the default is dangerous (e.g. `dry_run: false`). This is
@@ -167,6 +183,13 @@ stages:
     agent_requirements: { cpu_cores: 4, memory_gb: 16, runtime_limit_seconds: 7200 }  # per-stage override
     ...
 ```
+The configuration name is the join key: at run time the selected name is looked up in each task's
+`alternative_agent_requirements`, or matched against that task's `agent_requirements.name`. Give
+the task's default profile a `name:` equal to one configuration, and add a same-named key under
+`alternative_agent_requirements` in every task that needs different resources; unmatched tasks
+silently keep their defaults. Also note `alternative_agent_requirements` profiles accept only
+`cpu_cores`, `memory_gb`, `scheduler_cpu_cost`, `agent_profile`, `description`, no
+`runtime_limit_seconds`.
 
 ### Passing *computed* outputs between stages: `result.env`
 A `type: stage` parameter can only pull a **static** upstream parameter value. To pass something
@@ -206,15 +229,18 @@ steps:
         stage_parameter: row_count
 ```
 Rules that bite (verified on this server):
-- **Format:** one `KEY=value` per line; blank lines and `#` comments ignored.
+- **Format:** one `KEY=value` per line, split at the first `=`; blank lines are ignored. There is
+  no comment support, keep `#` lines out (a `#` line containing `=` becomes a variable).
 - **Location matters.** `result.env` must land in the step's **run output directory** — its
   default CWD. Since every step should `cd /scratch` first (see
   [`environment.md`](./environment.md)), capture `run_dir="$PWD"` *before* the `cd` and write
   `"$run_dir/result.env"`. Writing it to `/scratch` means downstream stages never see it.
 - Between **steps of one task**, `result.env` variables auto-merge into the next step's env
   (reference them as `$VAR`). Between **stages of a workflow**, they're pulled via `type: stage`.
-- Persist the actual **data** to a workspace **location** (not `/scratch`, which is per-container
-  ephemeral). File/directory parameters inject as absolute `/w/<workspace>/<location>/...` paths
+- Persist the actual **data** to a workspace **location** (not `/scratch`, which is a per-run
+  agent-local directory: shared by the steps of one task run, deleted when the run releases its
+  agent, and never visible to another stage or run). File/directory parameters inject as absolute
+  `/w/<workspace>/<location>/...` paths
   that survive across steps, stages, and container images — so an absolute path emitted to
   `result.env` works downstream when consumed by a **`type: stage` file/directory parameter**.
 - **Caveat — a `glob_parameter.path` base must be workspace-RELATIVE, not absolute** (see the
@@ -276,16 +302,21 @@ them.
         - { task_parameter_name: input_file,  expression: '${0}' }        # full matched path
         - { task_parameter_name: sample_name, expression: '${basename}' } # filename w/o extension
 ```
-**Capture expressions** (dollar-brace): `${0}` full matched path, `${1}`,`${2}`,… successive `*`
-groups, plus `${directory}` (base), `${file_directory}`, `${file_name}`, `${basename}`,
-`${file_extension}`. Wildcards: `*` one level, `**` recurse, `***` greedy.
+For the full capture-expression and wildcard syntax, see
+`/opt/frontend/docs/workspaces/automation/workflow-details.md` (`## Parameters`,
+`#### Glob capture expressions`).
 
 **Two gotchas that cost real debugging time — both verified:**
 1. **Field name is `parameter` / `parameter_expression`, NOT `stage_parameter`.** Inside
    `task_parameters` you use `stage_parameter` / `stage_parameter_expression`; inside a
    `glob_parameter.path` (`type: stage`) it's **`parameter` / `parameter_expression`**. Using
-   `stage_parameter` here makes the stage **silently expand to 0 instances with no error** — the
-   worst failure mode. (An older shipped example got this wrong.)
+   `stage_parameter` here makes `workflow-preview` show the stage with **0 instances and no
+   error** (the base resolves empty and the preview swallows the glob error for any stage with
+   `depends_on`); an actual run fails the stage with `Failed to get task config list for workflow
+   stage: <stage> - Failed to resolve workflow parameter: either 'parameterName' or
+   'parameterExpression' must be set`. (The shipped template
+   `test/Automation/Workflows/UnitTests/test_glob_parameter_expr.workflow.yaml` still has this
+   wrong, do not copy its `glob_parameter.path`.)
 2. **The glob base must be workspace-RELATIVE.** Directory params / `result.env` emit absolute
    `/w/<workspace>/…` paths, but `glob_parameter.path` wants a relative path — an absolute one
    fails with `Glob file does not yet exist: 'w/...'`. Emit the relative form upstream:

@@ -27,8 +27,8 @@ gautil client task-list --path=Sandbox --output=json | jq '.[].path'
 gautil client task-list --path=Sandbox/hello --output=json | jq '.[0].parameters'
 
 # 3) Run it, capture the run id, watch to terminal
-run_id=$(gautil client task-run Sandbox/hello -p who=agent | head -1)
-gautil client task-status "$run_id" --output=json --watch | jq '{status,returnCode}'
+run_id=$(gautil client task-run Sandbox/hello -p who=agent)   # stdout is exactly the run id
+gautil client task-status "$run_id" --output=jsonl --watch | jq '{status,returnCode}'
 
 # 4) Read the log (logfmt is best for agents)
 gautil client task-log "$run_id" --output=logfmt --streams=stdout,messages

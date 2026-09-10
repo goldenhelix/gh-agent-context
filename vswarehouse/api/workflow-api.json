@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://example.varseq.com:443/w/my_workspace/mcp/api"
+      "url": "https://example.varseq.com/w/my_workspace/mcp/api"
     }
   ],
   "externalDocs": {
@@ -790,32 +790,16 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "taskRunId": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "taskRunId"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ],
-                      "additionalProperties": false
+                  "type": "object",
+                  "properties": {
+                    "taskRunId": {
+                      "type": "string"
                     }
-                  ]
+                  },
+                  "required": [
+                    "taskRunId"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -969,6 +953,9 @@
                         "deleted",
                         "skipped"
                       ]
+                    },
+                    "generation": {
+                      "type": "number"
                     },
                     "startTime": {
                       "type": "number"
@@ -1225,8 +1212,8 @@
       },
       "delete": {
         "operationId": "tasks-deleteRun",
-        "summary": "Delete a task run folder",
-        "description": "Delete a task run folder, including logs and outputs",
+        "summary": "Delete a task run",
+        "description": "Mark a task run deleted. Its logs and output folder are kept unless purge is set.",
         "tags": [
           "tasks"
         ],
@@ -1243,6 +1230,13 @@
               "type": "string"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "purge",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1252,11 +1246,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
+                  "properties": {},
                   "additionalProperties": false
                 }
               }
@@ -1345,11 +1335,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
+                  "properties": {},
                   "additionalProperties": false
                 }
               }
@@ -1428,11 +1414,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
+                  "properties": {},
                   "additionalProperties": false
                 }
               }
@@ -1511,11 +1493,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
+                  "properties": {},
                   "additionalProperties": false
                 }
               }
@@ -1844,6 +1822,9 @@
                           "deleted",
                           "skipped"
                         ]
+                      },
+                      "generation": {
+                        "type": "number"
                       },
                       "startTime": {
                         "type": "number"
@@ -2222,6 +2203,9 @@
                           "deleted",
                           "skipped"
                         ]
+                      },
+                      "generation": {
+                        "type": "number"
                       },
                       "startTime": {
                         "type": "number"
@@ -2876,32 +2860,16 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "workflowRunId": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "workflowRunId"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ],
-                      "additionalProperties": false
+                  "type": "object",
+                  "properties": {
+                    "workflowRunId": {
+                      "type": "string"
                     }
-                  ]
+                  },
+                  "required": [
+                    "workflowRunId"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -2990,32 +2958,16 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "workflowRunId": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "workflowRunId"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ],
-                      "additionalProperties": false
+                  "type": "object",
+                  "properties": {
+                    "workflowRunId": {
+                      "type": "string"
                     }
-                  ]
+                  },
+                  "required": [
+                    "workflowRunId"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -3493,170 +3445,154 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ],
-                      "additionalProperties": false
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
                     },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "path": {
-                          "type": "string"
-                        },
-                        "stageList": {
-                          "type": "array",
-                          "items": {
+                    "stageList": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "stageName": {
+                            "type": "string"
+                          },
+                          "singleTaskStage": {
+                            "type": "boolean"
+                          },
+                          "error": {
+                            "type": "string"
+                          },
+                          "estimatedRuntimeSec": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "possibleAgents": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "agentRequirements": {
                             "type": "object",
                             "properties": {
-                              "stageName": {
+                              "name": {
                                 "type": "string"
                               },
-                              "singleTaskStage": {
-                                "type": "boolean"
-                              },
-                              "error": {
+                              "agentProfile": {
                                 "type": "string"
                               },
-                              "estimatedRuntimeSec": {
-                                "anyOf": [
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
-                                ]
+                              "description": {
+                                "type": "string"
                               },
-                              "possibleAgents": {
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
-                                }
+                              "cpuCores": {
+                                "type": "number"
                               },
-                              "agentRequirements": {
-                                "type": "object",
-                                "properties": {
-                                  "name": {
-                                    "type": "string"
-                                  },
-                                  "agentProfile": {
-                                    "type": "string"
-                                  },
-                                  "description": {
-                                    "type": "string"
-                                  },
-                                  "cpuCores": {
-                                    "type": "number"
-                                  },
-                                  "schedulerCpuCost": {
-                                    "type": "number"
-                                  },
-                                  "memoryGb": {
-                                    "type": "number"
-                                  }
-                                },
-                                "required": [
-                                  "name",
-                                  "cpuCores",
-                                  "memoryGb"
-                                ],
-                                "additionalProperties": false
+                              "schedulerCpuCost": {
+                                "type": "number"
                               },
-                              "alternativeAgentRequirements": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "name": {
-                                      "type": "string"
-                                    },
-                                    "agentProfile": {
-                                      "type": "string"
-                                    },
-                                    "description": {
-                                      "type": "string"
-                                    },
-                                    "cpuCores": {
-                                      "type": "number"
-                                    },
-                                    "schedulerCpuCost": {
-                                      "type": "number"
-                                    },
-                                    "memoryGb": {
-                                      "type": "number"
-                                    }
-                                  },
-                                  "required": [
-                                    "name",
-                                    "cpuCores",
-                                    "memoryGb"
-                                  ],
-                                  "additionalProperties": false
-                                }
-                              },
-                              "tasks": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "taskPath": {
-                                      "type": "string"
-                                    },
-                                    "parameters": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "object",
-                                        "properties": {
-                                          "name": {
-                                            "type": "string"
-                                          },
-                                          "value": {
-                                            "type": "string"
-                                          }
-                                        },
-                                        "required": [
-                                          "name",
-                                          "value"
-                                        ],
-                                        "additionalProperties": false
-                                      }
-                                    }
-                                  },
-                                  "required": [
-                                    "taskPath",
-                                    "parameters"
-                                  ],
-                                  "additionalProperties": false
-                                }
+                              "memoryGb": {
+                                "type": "number"
                               }
                             },
                             "required": [
-                              "stageName",
-                              "singleTaskStage",
-                              "estimatedRuntimeSec",
-                              "possibleAgents",
-                              "tasks"
+                              "name",
+                              "cpuCores",
+                              "memoryGb"
                             ],
                             "additionalProperties": false
+                          },
+                          "alternativeAgentRequirements": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "agentProfile": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "cpuCores": {
+                                  "type": "number"
+                                },
+                                "schedulerCpuCost": {
+                                  "type": "number"
+                                },
+                                "memoryGb": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "cpuCores",
+                                "memoryGb"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "tasks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "taskPath": {
+                                  "type": "string"
+                                },
+                                "parameters": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "name": {
+                                        "type": "string"
+                                      },
+                                      "value": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "name",
+                                      "value"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "taskPath",
+                                "parameters"
+                              ],
+                              "additionalProperties": false
+                            }
                           }
-                        }
-                      },
-                      "required": [
-                        "path",
-                        "stageList"
-                      ],
-                      "additionalProperties": false
+                        },
+                        "required": [
+                          "stageName",
+                          "singleTaskStage",
+                          "estimatedRuntimeSec",
+                          "possibleAgents",
+                          "tasks"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
-                  ]
+                  },
+                  "required": [
+                    "path",
+                    "stageList"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -4567,8 +4503,8 @@
       },
       "delete": {
         "operationId": "workflows-deleteRun",
-        "summary": "Delete a workflow",
-        "description": "Delete a workflow and all of it's run folders, including logs and outputs",
+        "summary": "Delete a workflow run",
+        "description": "Mark a workflow run deleted and delete each of its task runs. Logs and output folders are kept unless purge is set.",
         "tags": [
           "workflows"
         ],
@@ -4585,6 +4521,13 @@
               "type": "string"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "purge",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -4594,11 +4537,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
+                  "properties": {},
                   "additionalProperties": false
                 }
               }
@@ -8564,6 +8503,9 @@
                         "skipped"
                       ]
                     },
+                    "generation": {
+                      "type": "number"
+                    },
                     "startTime": {
                       "type": "number"
                     },
@@ -9276,6 +9218,9 @@
                           "skipped"
                         ]
                       },
+                      "generation": {
+                        "type": "number"
+                      },
                       "startTime": {
                         "type": "number"
                       },
@@ -9732,6 +9677,24 @@
                           "additionalProperties": false
                         }
                       },
+                      "dockerImage": {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string"
+                          },
+                          "resolved": {
+                            "type": "string"
+                          },
+                          "usesWorkspaceDefault": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "usesWorkspaceDefault"
+                        ],
+                        "additionalProperties": false
+                      },
                       "rawConfig": {
                         "type": "array",
                         "items": {
@@ -9761,6 +9724,105 @@
                     ],
                     "additionalProperties": false
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/error.BAD_REQUEST"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authorization not provided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/error.UNAUTHORIZED"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/error.FORBIDDEN"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/error.INTERNAL_SERVER_ERROR"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugins/copyToWorkspace": {
+      "post": {
+        "operationId": "plugins-copyToWorkspace",
+        "summary": "Copy a plugin definition into the workspace",
+        "description": "Copy a plugin definition, typically a system one, into the workspace Automation/Plugins folder so it can be edited. Returns the path of the copy.",
+        "tags": [
+          "plugins"
+        ],
+        "security": [
+          {
+            "Authorization": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pluginConfigPath": {
+                    "type": "string"
+                  },
+                  "targetName": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "pluginConfigPath",
+                  "targetName"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
                 }
               }
             }
@@ -10252,6 +10314,9 @@
                         "deleted",
                         "skipped"
                       ]
+                    },
+                    "generation": {
+                      "type": "number"
                     },
                     "startTime": {
                       "type": "number"
@@ -11543,7 +11608,11 @@
               "enum": [
                 "acmg_variant",
                 "acmg_cnv",
-                "acmg_sv"
+                "acmg_sv",
+                "cancer_variant",
+                "cancer_interpretation",
+                "cancer_drug",
+                "catalog_record"
               ]
             }
           },
@@ -11582,7 +11651,11 @@
                             "enum": [
                               "acmg_variant",
                               "acmg_cnv",
-                              "acmg_sv"
+                              "acmg_sv",
+                              "cancer_variant",
+                              "cancer_interpretation",
+                              "cancer_drug",
+                              "catalog_record"
                             ]
                           },
                           "outputFields": {
@@ -11590,6 +11663,21 @@
                             "items": {
                               "type": "string"
                             }
+                          },
+                          "requiredFields": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "catalogTypes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "assignToRunner": {
+                            "type": "boolean"
                           },
                           "params": {
                             "type": "array",
@@ -11661,7 +11749,9 @@
                             "type": "string",
                             "enum": [
                               "text",
-                              "enum"
+                              "enum",
+                              "list-string",
+                              "criteria"
                             ]
                           },
                           "enumValues": {
@@ -11677,6 +11767,47 @@
                           "type"
                         ],
                         "additionalProperties": false
+                      }
+                    },
+                    "fieldCatalogs": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "text",
+                                "enum",
+                                "list-string",
+                                "criteria"
+                              ]
+                            },
+                            "enumValues": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "label",
+                            "type"
+                          ],
+                          "additionalProperties": false
+                        }
                       }
                     },
                     "builtinDefaults": {
@@ -11695,7 +11826,11 @@
                             "enum": [
                               "acmg_variant",
                               "acmg_cnv",
-                              "acmg_sv"
+                              "acmg_sv",
+                              "cancer_variant",
+                              "cancer_interpretation",
+                              "cancer_drug",
+                              "catalog_record"
                             ]
                           },
                           "instruction": {
@@ -11723,6 +11858,7 @@
                     "enabled",
                     "scripts",
                     "fieldCatalog",
+                    "fieldCatalogs",
                     "builtinDefaults"
                   ],
                   "additionalProperties": false
@@ -11808,7 +11944,11 @@
                     "enum": [
                       "acmg_variant",
                       "acmg_cnv",
-                      "acmg_sv"
+                      "acmg_sv",
+                      "cancer_variant",
+                      "cancer_interpretation",
+                      "cancer_drug",
+                      "catalog_record"
                     ]
                   },
                   "scriptId": {
@@ -11822,6 +11962,46 @@
                     "type": "array",
                     "items": {
                       "type": "string"
+                    }
+                  },
+                  "recordFields": {
+                    "maxItems": 500,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "label": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "text",
+                            "enum",
+                            "list-string"
+                          ]
+                        },
+                        "enumValues": {
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 400
+                          }
+                        },
+                        "html": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "key"
+                      ]
                     }
                   },
                   "paramValues": {
@@ -11870,13 +12050,15 @@
                       "propertyNames": {
                         "type": "string"
                       },
-                      "additionalProperties": {
-                        "type": "string"
-                      }
+                      "additionalProperties": {}
+                    },
+                    "noChangesNeeded": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
-                    "fields"
+                    "fields",
+                    "noChangesNeeded"
                   ],
                   "additionalProperties": false
                 }
@@ -11962,6 +12144,15 @@
                       "userId": {
                         "type": "string"
                       },
+                      "source": {
+                        "type": "string",
+                        "enum": [
+                          "chat",
+                          "workbench",
+                          "editor",
+                          "interpretation"
+                        ]
+                      },
                       "action": {
                         "anyOf": [
                           {
@@ -11997,6 +12188,7 @@
                     },
                     "required": [
                       "userId",
+                      "source",
                       "action",
                       "context",
                       "model",
@@ -12344,6 +12536,18 @@
                           "parts": {
                             "type": "array",
                             "items": {}
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "properties": {
+                              "time": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "time"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -13259,16 +13463,10 @@
       }
     },
     "securitySchemes": {
-      "ApiKeyAuth": {
-        "type": "apiKey",
-        "in": "header",
-        "name": "X-API-KEY"
+      "Authorization": {
+        "type": "http",
+        "scheme": "bearer"
       }
     }
-  },
-  "security": [
-    {
-      "ApiKeyAuth": []
-    }
-  ]
+  }
 }

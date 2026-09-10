@@ -171,6 +171,16 @@ paths:
           description: "Free-text variant to parse: coordinate+alleles, genomic/protein HGVS, GENE p.Change shorthand, rsID, or VCV ID."
           example: "BRAF V600E"
 
+        - name: "genePrefSourceId"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "GenePreferences"
+            description: "Catalog id of the gene preferences catalog to consult when resolving a gene name to its preferred transcript. Defaults to the workspace's GenePreferences catalog."
+          description: "Catalog id of the gene preferences catalog to consult when resolving a gene name to its preferred transcript. Defaults to the workspace's GenePreferences catalog."
+          example: "GenePreferences"
+
       responses:
         200:
           description: "Success"
@@ -259,6 +269,46 @@ paths:
           description: "RefSeq transcript to annotate against; if omitted, the gene's default transcript is used."
           example: "NM_004333"
 
+        - name: "starForTer"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "If true, spell a stop gain as '*' (p.Trp26*) rather than Ter (p.Trp26Ter), which is the default. Affects pDotThreeLetter only; pDot is one-letter and always uses '*'."
+          description: "If true, spell a stop gain as '*' (p.Trp26*) rather than Ter (p.Trp26Ter), which is the default. Affects pDotThreeLetter only; pDot is one-letter and always uses '*'."
+
+        - name: "starForFrameshiftTer"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "If true, spell a frameshift's new termination codon as '*' (p.Arg83Glnfs*6) rather than the HGVS-recommended Ter (p.Arg83GlnfsTer6), which is the default. Independent of starForTer. Affects pDotThreeLetter only; pDot is one-letter and always uses '*'."
+          description: "If true, spell a frameshift's new termination codon as '*' (p.Arg83Glnfs*6) rather than the HGVS-recommended Ter (p.Arg83GlnfsTer6), which is the default. Independent of starForTer. Affects pDotThreeLetter only; pDot is one-letter and always uses '*'."
+
+        - name: "startCodonUnknown"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "If true, render an initiator codon variant as p.Met1? rather than naming the substituted residue (p.Met1Trp), which is the default. Affects pDotThreeLetter only."
+          description: "If true, render an initiator codon variant as p.Met1? rather than naming the substituted residue (p.Met1Trp), which is the default. Affects pDotThreeLetter only."
+
+        - name: "showDeletedBases"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "If true, cDot names the deleted bases (c.51delA) rather than using the bare HGVS form (c.51del), which is the default."
+          description: "If true, cDot names the deleted bases (c.51delA) rather than using the bare HGVS form (c.51del), which is the default."
+
+        - name: "enableRepeatNotation"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "If true, a variant lying in a tandem repeat is rendered in cDot with HGVS repeat notation (c.337GAG[4]) rather than as a plain deletion (c.337GAGdel), which is the default."
+          description: "If true, a variant lying in a tandem repeat is rendered in cDot with HGVS repeat notation (c.337GAG[4]) rather than as a plain deletion (c.337GAGdel), which is the default."
+
       responses:
         200:
           description: "Success"
@@ -311,6 +361,46 @@ paths:
                 $ref: "#/components/schemas/RefAltVariant"
           description: "Normalized ref/alt variant, as returned by variantQuery."
 
+        - name: "starForTer"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "If true, spell a stop gain as '*' (p.Trp26*) rather than Ter (p.Trp26Ter), which is the default. Affects pDotThreeLetter only; pDot is one-letter and always uses '*'."
+          description: "If true, spell a stop gain as '*' (p.Trp26*) rather than Ter (p.Trp26Ter), which is the default. Affects pDotThreeLetter only; pDot is one-letter and always uses '*'."
+
+        - name: "starForFrameshiftTer"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "If true, spell a frameshift's new termination codon as '*' (p.Arg83Glnfs*6) rather than the HGVS-recommended Ter (p.Arg83GlnfsTer6), which is the default. Independent of starForTer. Affects pDotThreeLetter only; pDot is one-letter and always uses '*'."
+          description: "If true, spell a frameshift's new termination codon as '*' (p.Arg83Glnfs*6) rather than the HGVS-recommended Ter (p.Arg83GlnfsTer6), which is the default. Independent of starForTer. Affects pDotThreeLetter only; pDot is one-letter and always uses '*'."
+
+        - name: "startCodonUnknown"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "If true, render an initiator codon variant as p.Met1? rather than naming the substituted residue (p.Met1Trp), which is the default. Affects pDotThreeLetter only."
+          description: "If true, render an initiator codon variant as p.Met1? rather than naming the substituted residue (p.Met1Trp), which is the default. Affects pDotThreeLetter only."
+
+        - name: "showDeletedBases"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "If true, cDot names the deleted bases (c.51delA) rather than using the bare HGVS form (c.51del), which is the default."
+          description: "If true, cDot names the deleted bases (c.51delA) rather than using the bare HGVS form (c.51del), which is the default."
+
+        - name: "enableRepeatNotation"
+          in: "query"
+          required: false
+          schema:
+            type: "boolean"
+            description: "If true, a variant lying in a tandem repeat is rendered in cDot with HGVS repeat notation (c.337GAG[4]) rather than as a plain deletion (c.337GAGdel), which is the default."
+          description: "If true, a variant lying in a tandem repeat is rendered in cDot with HGVS repeat notation (c.337GAG[4]) rather than as a plain deletion (c.337GAGdel), which is the default."
+
       responses:
         200:
           description: "Success"
@@ -339,6 +429,16 @@ paths:
             description: "Free-text CNV to parse: gene/exon span, cytoband, coordinate range, or c. dup/del HGVS."
           description: "Free-text CNV to parse: gene/exon span, cytoband, coordinate range, or c. dup/del HGVS."
           example: "BRCA2 exon 3-5 deletion"
+
+        - name: "genePrefSourceId"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "GenePreferences"
+            description: "Catalog id of the gene preferences catalog to consult when resolving a gene name to its preferred transcript. Defaults to the workspace's GenePreferences catalog."
+          description: "Catalog id of the gene preferences catalog to consult when resolving a gene name to its preferred transcript. Defaults to the workspace's GenePreferences catalog."
+          example: "GenePreferences"
 
       responses:
         200:
@@ -399,10 +499,10 @@ paths:
           required: true
           schema:
             type: "string"
-            example: "GRCh_38"
-            description: "Coord sys id for the workspace build (e.g. GRCh_38); must match the configured lookup assembly."
-          description: "Coord sys id for the workspace build (e.g. GRCh_38); must match the configured lookup assembly."
-          example: "GRCh_38"
+            example: "GRCh_38,Chromosome,Homo sapiens"
+            description: "Coord sys id for the workspace build, as the full three-part form; must match the configured lookup assembly exactly."
+          description: "Coord sys id for the workspace build, as the full three-part form; must match the configured lookup assembly exactly."
+          example: "GRCh_38,Chromosome,Homo sapiens"
 
       responses:
         200:
@@ -415,8 +515,8 @@ paths:
   /default-transcript-for-gene:
     get:
       operationId: "defaultTranscriptForGene"
-      summary: "Resolve the default RefSeq transcript for a gene; when several transcripts exist, pick by ClinVar assessment counts (no app gene preferences)."
-      description: "Returns a single default RefSeq transcript for a gene, chosen by ClinVar assessment counts when multiple transcripts exist. Ignores per-user/app gene preferences; for the full transcript list with counts use geneTranscripts. Identify the gene via geneId (preferred) or geneName."
+      summary: "Resolve the default RefSeq transcript for a gene, honoring the workspace gene preferences with canonical-transcript rules as the fallback."
+      description: "Returns a single default RefSeq transcript for a gene. A PreferredTranscript from the workspace GenePreferences catalog wins when set for the gene; otherwise the canonical transcript is chosen (MANE Select, then LRG, completeness, and length). For the full transcript list use geneTranscripts. Identify the gene via geneId (preferred) or geneName."
       x-agent-expose: "progressive"
       x-agent-cost: "cheap"
       x-agent-permission: "file:read"
@@ -426,10 +526,10 @@ paths:
           required: true
           schema:
             type: "string"
-            example: "GRCh_38"
-            description: "Coord sys id for the workspace build; must match the configured lookup assembly."
-          description: "Coord sys id for the workspace build; must match the configured lookup assembly."
-          example: "GRCh_38"
+            example: "GRCh_38,Chromosome,Homo sapiens"
+            description: "Coord sys id for the workspace build, as the full three-part form; must match the configured lookup assembly exactly."
+          description: "Coord sys id for the workspace build, as the full three-part form; must match the configured lookup assembly exactly."
+          example: "GRCh_38,Chromosome,Homo sapiens"
 
         - name: "geneId"
           in: "query"
@@ -450,6 +550,16 @@ paths:
             description: "Gene symbol; used when geneId is omitted."
           description: "Gene symbol; used when geneId is omitted."
           example: "BRCA1"
+
+        - name: "genePrefSourceId"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            example: "GenePreferences"
+            description: "Catalog id of the gene preferences catalog to consult. Defaults to the workspace's GenePreferences catalog."
+          description: "Catalog id of the gene preferences catalog to consult. Defaults to the workspace's GenePreferences catalog."
+          example: "GenePreferences"
 
       responses:
         200:
@@ -473,10 +583,10 @@ paths:
           required: true
           schema:
             type: "string"
-            example: "GRCh_38"
-            description: "Coord sys id for the workspace build; must match the configured lookup assembly."
-          description: "Coord sys id for the workspace build; must match the configured lookup assembly."
-          example: "GRCh_38"
+            example: "GRCh_38,Chromosome,Homo sapiens"
+            description: "Coord sys id for the workspace build, as the full three-part form; must match the configured lookup assembly exactly."
+          description: "Coord sys id for the workspace build, as the full three-part form; must match the configured lookup assembly exactly."
+          example: "GRCh_38,Chromosome,Homo sapiens"
 
         - name: "geneId"
           in: "query"
@@ -742,14 +852,14 @@ paths:
                   items:
                     type: "string"
                   example:
-                    - "chr"
-                    - "start"
-                    - "stop"
-                    - "chr ~ ':' ~ start + 1 ~ '-' ~ stop"
-                    - "refAlt"
-                    - "classification"
-                    - "len(classification)"
-                    - "mid(classification, 0, 100)"
+                    - "Chr"
+                    - "Start"
+                    - "Stop"
+                    - "Chr ~ \":\" ~ (Start + 1) ~ \"-\" ~ Stop"
+                    - "RefAlt"
+                    - "Classification"
+                    - "len(Classification)"
+                    - "slice(Classification, 0, 100)"
                   description: "Fields to return by symbol. Default is all fields."
                 fieldNames:
                   type: "array"
@@ -1275,7 +1385,8 @@ components:
           format: "int32"
         transcriptName:
           type: "string"
-          example: "NM_007294"
+          description: "RefSeq accession including its version suffix, as stored on the gene track."
+          example: "NM_007294.4"
         geneName:
           type: "string"
           example: "BRCA1"
@@ -1316,17 +1427,19 @@ components:
           type: "string"
         refSeqGeneId:
           type: "string"
+          description: "Set on a RefSeq gene track, where ensemblGeneId is null. The two are populated by series and never together."
+          example: "672"
         ensemblGeneId:
           type: "string"
-          example: "ENSG00000012048"
+          description: "Set on an Ensembl gene track, where refSeqGeneId is null. The two are populated by series and never together."
         proteinId:
           type: "string"
-          example: "NP_009225"
+          example: "NP_009225.1"
         lrgId:
           type: "string"
         maneStatus:
           type: "string"
-          example: "MANE Select"
+          example: "Select"
         transcriptType:
           type: "string"
         firstAlternativeStartCodon:
@@ -1365,9 +1478,13 @@ components:
         clinVarAssessmentsCounts:
           type: "number"
           format: "int32"
+        canonical:
+          type: "boolean"
+          description: "True for the transcript the canonical rules pick (MANE Select, then LRG, completeness, and length). Gene preferences are not consulted."
       required:
         - "transcript"
         - "clinVarAssessmentsCounts"
+        - "canonical"
 
     GeneTranscriptsResponse:
       type: "object"
@@ -1469,7 +1586,7 @@ components:
           description: "The ID of one of the built in sources, e.g. 'gene', 'reference', 'cytoband', 'hpo', 'mondo'"
         catalogId:
           type: "string"
-          description: "For workspace-named catalogs, the concrete per-build catalog id (filename stem, e.g. 'GeneLists_GRCh_38'). Empty for non-catalog sources. Use this to query the catalog via ApiCatalogs."
+          description: "Selects a catalog in the workspace catalogs folder by id (filename stem). Both the bare name and the per-build filename resolve, e.g. 'GeneLists' or 'GeneLists_GRCh_38'. Catalogs are not reachable through sourceUrl, which only scans watched annotation folders."
         series:
           type: "string"
           description: "The series name, e.g. 'ClinVar-NCBI'"
@@ -1514,7 +1631,7 @@ components:
           example: "Ref/Alt"
         symbol:
           type: "string"
-          example: "refAlt"
+          example: "RefAlt"
         dataType:
           type: "string"
           example: "s"
@@ -1592,8 +1709,8 @@ components:
           description: "Only included if requested via includeFields param"
         coordSysId:
           type: "string"
-          description: "e.g. Human-GRCh37"
-          example: "Human-GRCh37"
+          description: "Identifier of the coordinate system the source is mapped to, e.g. GRCh_38,Chromosome,Homo sapiens"
+          example: "GRCh_38,Chromosome,Homo sapiens"
         featureType:
           $ref: "#/components/schemas/SourceFeatureType"
           type: "object"
@@ -1776,18 +1893,62 @@ components:
         - "result"
         - "error"
 
-    PredicateNode:
+    ExpressionNode:
       type: "object"
       properties:
+        children:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/ExpressionNode"
+            type: "object"
+          description: "Used by And, Or, Not, and AlignedArrayMatch."
         field:
           type: "string"
-          example: "classification"
+          example: "Classification"
         op:
-          type: "string"
-          example: "Comparison operator (case-insensitive). Supported operators:\n        - Equality: \"=\", \"eq\", \"equal\", \"equals\"\n        - Not Equal: \"!=\", \"neq\", \"not equal\", \"<>\"\n        - Less Than: \"<\", \"lt\", \"less than\"\n        - Less Than Or Equal: \"<=\", \"lte\", \"less than or equal\"\n        - Greater Than: \">\", \"gt\", \"greater than\"\n        - Greater Than Or Equal: \">=\", \"gte\", \"greater than or equal\"\n        - Starts With: \"starts with\", \"starts\", \"starts_with\"\n        - Ends With: \"ends with\", \"ends\", \"ends_with\"\n        - Contains: \"contains\"\n        - Is Null: \"is null\", \"is_null\"\n        - Is Not Null: \"is not null\", \"is_not_null\"\n        "
+          $ref: "#/components/schemas/OperatorType"
+          type: "object"
+          description: "And, Or, Not, Equals, NotEquals, LessThan, LessThanOrEqual, GreaterThan, GreaterThanOrEqual, StartsWith, EndsWith, Substring, IsNull, IsNotNull, AlignedArrayMatch"
         value:
           type: "string"
           example: "Pathogenic"
       required:
-        - "field"
         - "op"
+
+    FormatOption:
+      type: "string"
+      enum:
+        - "values"
+        - "objects"
+        - "fieldNames"
+        - "fieldMetas"
+        - "recordIds"
+        - "recordErrors"
+        - "serializedQuery"
+
+    GenomicQueryMode:
+      type: "string"
+      enum:
+        - "Exact"
+        - "Overlaps"
+        - "Contains"
+        - "Within"
+
+    OperatorType:
+      type: "string"
+      enum:
+        - "Or"
+        - "And"
+        - "Not"
+        - "Equals"
+        - "NotEquals"
+        - "LessThan"
+        - "LessThanOrEqual"
+        - "GreaterThan"
+        - "GreaterThanOrEqual"
+        - "StartsWith"
+        - "EndsWith"
+        - "Substring"
+        - "IsNull"
+        - "IsNotNull"
+        - "AlignedArrayMatch"

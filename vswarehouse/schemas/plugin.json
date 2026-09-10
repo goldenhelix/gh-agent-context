@@ -1,0 +1,325 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "jsonSchema.json",
+  "title": "Plugin Schema",
+  "description": "A plugin schema",
+  "type": "object",
+  "required": [
+    "name",
+    "plugin",
+    "agent_requirements"
+  ],
+  "properties": {
+    "name": {
+      "description": "The name of the plugin",
+      "type": "string"
+    },
+    "description": {
+      "description": "The description of the plugin",
+      "type": "string"
+    },
+    "auto_generate_session_for_account": {
+      "description": "The username of the service account (or {user}, {workspaceBot}, {workspaceAdminBot}) to auto-generate a session for",
+      "type": "string"
+    },
+    "auto_generate_ai_key_for_account": {
+      "description": "The username of the service account (or {user}, {workspaceBot}, {workspaceAdminBot}) to mint a scoped OpenAI-compatible AI key for when workspace AI is enabled. Injected as GH_AI_BASE_URL, GH_AI_API_KEY, GH_AI_DEFAULT_MODEL, and GH_AI_MODELS; revoked when the run ends.",
+      "type": "string"
+    },
+    "icon_path": {
+      "description": "The relative path to a workspace-local icon image. Preferred for user/workspace plugins that want to ship their own branded image. System plugins should use icon_name instead so the icon is served from the frontend bundle rather than needing a file-serving URL route.",
+      "type": "string"
+    },
+    "icon_name": {
+      "description": "The name of an icon from the frontend icon registry (see lookupIcon / getIconNames in fileUtils.ts). Used for system plugins that live outside the workspace and therefore cannot serve a file via /api/view/. If both icon_name and icon_path are set, icon_name wins.",
+      "type": "string"
+    },
+    "parameters": {
+      "description": "The parameters of the plugin",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "The name of the parameter used in the task script",
+            "type": "string"
+          },
+          "group": {
+            "description": "The optional group that the parameter belongs to for grouping parameters in the UI",
+            "type": "string"
+          },
+          "label": {
+            "description": "Label for the parameter for display in the UI",
+            "type": "string"
+          },
+          "help": {
+            "description": "Optional help for the parameter",
+            "type": "string"
+          },
+          "type": {
+            "description": "The type of the parameter",
+            "enum": [
+              "string",
+              "float",
+              "integer",
+              "boolean",
+              "enum",
+              "file",
+              "directory",
+              "secret",
+              "stage",
+              "catalog"
+            ]
+          },
+          "list": {
+            "description": "The parameter is a list",
+            "type": "boolean"
+          },
+          "create": {
+            "description": "The file parameter is for a file that will be created",
+            "type": "boolean"
+          },
+          "value": {
+            "description": "The default value of the parameter",
+            "type": [
+              "string",
+              "boolean",
+              "number"
+            ]
+          },
+          "optional": {
+            "description": "Allow the value to be optional",
+            "type": "boolean"
+          },
+          "choices": {
+            "description": "The choices of the parameter",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pattern_match": {
+            "description": "Acceptable file matches for the parameter",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "supports_location_mode": {
+            "description": "The file or directory parameter supports a location with Read Only, No Append or Read Write mode. Read Write is the default and other modes can be opted into if supported.",
+            "type": "string",
+            "enum": [
+              "read_only",
+              "read_write",
+              "no_append"
+            ]
+          },
+          "path": {
+            "description": "The path used for the file or directory selector. Can be a location or a {variable} between curly braces",
+            "type": "string"
+          },
+          "editable": {
+            "description": "Allow editing of the parameter",
+            "type": "boolean"
+          },
+          "stage": {
+            "description": "The stage name to pull the parameter from",
+            "type": "string"
+          },
+          "stage_parameter": {
+            "description": "The parameter name of the parameter in the stage to use as the value",
+            "type": "string"
+          },
+          "stage_parameter_expression": {
+            "description": "The expression to use to construct the value from the stage parameters outputs",
+            "type": "string"
+          },
+          "persist_key": {
+            "description": "The key to use for persisting this parameter value at the workspace level. When provided, the parameter value will be saved and loaded as a default for future workflow runs.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "label"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "install": {
+      "description": "Steps the checkout task runs after this plugin is installed or updated: in the server image, as the installing user, with WORKSPACE_DIR, GH_SERVER_URL, GH_WORKSPACE_ID and GH_SESSION_KEY set. They run on every install and update, so they must be idempotent.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "args"
+        ],
+        "properties": {
+          "name": {
+            "description": "The name of the step",
+            "type": "string"
+          },
+          "description": {
+            "description": "The description of the step",
+            "type": "string"
+          },
+          "env": {
+            "description": "Additional environment variables of the step",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "command": {
+            "description": "The command of the install step (default: bash)",
+            "type": "string"
+          },
+          "args": {
+            "description": "The arguments for the command of the step",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "retry_count": {
+      "description": "The number of times to retry the plugin if it fails (default: 0)",
+      "type": "integer"
+    },
+    "retry_delay": {
+      "description": "The delay in seconds between retries (default: 1)",
+      "type": "integer"
+    },
+    "starting_url": {
+      "description": "The url to the starting page of the plugin",
+      "type": "string"
+    },
+    "plugin": {
+      "type": "object",
+      "properties": {
+        "port": {
+          "description": "The port to expose the plugin on",
+          "type": "integer"
+        },
+        "env": {
+          "description": "Additional environment variables of the step",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "command": {
+          "description": "The command of the step",
+          "type": "string"
+        },
+        "args": {
+          "description": "The arguments for the command of the step",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "docker": {
+          "description": "The docker settings of the step",
+          "type": "object",
+          "required": [],
+          "properties": {
+            "image": {
+              "description": "The docker image of the step",
+              "type": "string"
+            },
+            "shared_memory_size": {
+              "description": "The shared memory size of the task (e.x. 1g, 512m)",
+              "type": "string"
+            },
+            "workspace_mount": {
+              "description": "The path to mount the workspace into the container",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "agent_requirements": {
+      "type": "object",
+      "description": "The allocated resources for the task. These are hard limits enforced by the Docker container. The task must operate within the specified RAM limit; exceeding this limit will result in the task being killed.",
+      "properties": {
+        "agent_profile": {
+          "type": "string",
+          "description": "A specific agent profile to use for the task (otherwise an agent profile that meets the requirements will be used)"
+        },
+        "cpu_cores": {
+          "type": "number",
+          "description": "The number of CPU cores to allocate for the task"
+        },
+        "scheduler_cpu_cost": {
+          "type": "number",
+          "description": "The CPU cost to use for scheduling the task. This can be less than cpu_cores if the task is not CPU intensive. If not specified, cpu_cores will be used"
+        },
+        "memory_gb": {
+          "type": "number",
+          "description": "The amount of memory in GB to allocate for the task"
+        },
+        "runtime_limit_seconds": {
+          "type": "number",
+          "description": "The maximum amount of time in seconds that the task is allowed to run. The task will be killed if it has not completed in this time"
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the this resource profile (otherwise Default will be used)"
+        },
+        "description": {
+          "type": "string",
+          "description": "The description of the this resource profile"
+        }
+      },
+      "required": [
+        "cpu_cores",
+        "memory_gb"
+      ],
+      "additionalProperties": false
+    },
+    "alternative_agent_requirements": {
+      "type": "object",
+      "description": "The available resource profiles defining CPU and memory allocations",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "The description of the resource profile"
+          },
+          "agent_profile": {
+            "type": "string",
+            "description": "A specific agent profile to use for the task (otherwise an agent profile that meets the requirements will be used)"
+          },
+          "cpu_cores": {
+            "type": "number",
+            "description": "The number of CPU cores to allocate for this profile"
+          },
+          "scheduler_cpu_cost": {
+            "type": "number",
+            "description": "The CPU cost to use for scheduling the task. This can be less than cpu_cores if the task is not CPU intensive. If not specified, cpu_cores will be used"
+          },
+          "memory_gb": {
+            "type": "number",
+            "description": "The amount of memory in GB to allocate for this profile"
+          }
+        },
+        "required": [
+          "cpu_cores",
+          "memory_gb"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

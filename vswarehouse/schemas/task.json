@@ -23,8 +23,16 @@
       "description": "The environment variable file for the task",
       "type": "string"
     },
+    "status_message": {
+      "description": "The status message shown for a running task, with ${parameter_name} expanded from the run parameters. Use ${parameter_name:-fallback text} to supply text for a parameter with no value. When unset, the run reports its own progress messages.",
+      "type": "string"
+    },
     "auto_generate_session_for_account": {
       "description": "The username of the service account (or {user}, {workspaceBot}, {workspaceAdminBot}) to auto-generate a session for",
+      "type": "string"
+    },
+    "auto_generate_ai_key_for_account": {
+      "description": "The username of the service account (or {user}, {workspaceBot}, {workspaceAdminBot}) to mint a scoped OpenAI-compatible AI key for when workspace AI is enabled. Injected as GH_AI_BASE_URL, GH_AI_API_KEY, GH_AI_DEFAULT_MODEL, and GH_AI_MODELS; revoked when the run ends.",
       "type": "string"
     },
     "parameters": {

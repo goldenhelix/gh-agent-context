@@ -6,7 +6,8 @@ whole server is in the top-level [`../CLAUDE.md`](../CLAUDE.md); this is the VS 
 
 ## The model in one paragraph
 A **task** is a declarative unit: typed parameters + one or more steps, each a shell script run
-either on the agent host (`type: cmd`) or inside a container image (`type: docker`). A
+in a container: `type: cmd` runs `bash -c` in the default server image (or the step's
+`docker.image`), `type: docker` runs an image's own entrypoint/args. A
 **workflow** chains tasks into **stages** with `depends_on` dependencies, threading outputs
 between stages via `type: stage` parameters, and can fan out over many inputs (glob / batch-CSV /
 parameter-file). A **plugin** packages a long-lived capability (e.g. a catalog builder) with its
@@ -29,7 +30,7 @@ own container and bootstrap. You run and monitor all of them with **`gautil clie
 | Artifact | Prefer (on server) | Fallback (this repo) |
 |---|---|---|
 | Product docs | `/opt/frontend/docs/**/*.md` | — (not mirrored; search the server) |
-| Validation schemas | `/opt/backend/workspace-schemas/{task,workflow,application}.json` | [`schemas/`](schemas/) |
+| Validation schemas | `/opt/backend/workspace-schemas/{task,workflow,application,plugin}.json` | [`schemas/`](schemas/) |
 | REST OpenAPI | live `/swagger/` (or `/auth/api/me/openApiUrls`) | [`api/`](api/) |
 | Built-in tasks | `/opt/backend/tasks/` | [`../server-index/built-in-tasks.md`](../server-index/built-in-tasks.md) |
 | Template examples | `/opt/server_templates/` | [`../server-index/server-templates.md`](../server-index/server-templates.md) |

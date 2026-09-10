@@ -281,8 +281,8 @@ paths:
             type: "number"
             format: "int32"
             example: 100
-            description: "Number of items to return per page (capped at 10000)."
-          description: "Number of items to return per page (capped at 10000)."
+            description: "Number of items to return per page. Defaults to 10000 when omitted."
+          description: "Number of items to return per page. Defaults to 10000 when omitted."
           example: 100
 
         - name: "offset"
@@ -386,6 +386,80 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FileEntry"
+                type: "object"
+  /{locationId}/verifyBlocks:
+    get:
+      operationId: "verifyBlocks"
+      summary: "Verify a self-describing block file against what it claims to contain"
+      description: "Reads a file written in the verifyblock format on the server's own filesystem and checks each block's header and checksum, returning a verdict rather than the bytes. This exists for the storage diagnostics: a client comparing its view of a share against the server's would otherwise have to stream the whole file back to check it, which both wastes the transfer and puts the file API in the measurement path. Verifying where the file is local costs no transfer at all and reads every block. Read-only; it never modifies the file, but it does read the contents and its verdict describes them, so it requires file:read."
+      x-agent-expose: "hidden"
+      x-agent-cost: "expensive"
+      x-agent-permission: "file:read"
+      parameters:
+        - name: "locationId"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+
+        - name: "uri"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "diagnostics/r3-9f2c.vsblk"
+            description: "Location-relative path of the file to verify"
+          description: "Location-relative path of the file to verify"
+          example: "diagnostics/r3-9f2c.vsblk"
+
+        - name: "runId"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "1780000000000"
+            description: "Run id the blocks must carry, as a string to support the full 64-bit range. A block carrying a different run id is a stale cached extent rather than corruption."
+          description: "Run id the blocks must carry, as a string to support the full 64-bit range. A block carrying a different run id is a stale cached extent rather than corruption."
+          example: "1780000000000"
+
+        - name: "fileId"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "3"
+            description: "File id the blocks must carry, as a string to support the full 64-bit range."
+          description: "File id the blocks must carry, as a string to support the full 64-bit range."
+          example: "3"
+
+        - name: "blockCount"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+            example: "512"
+            description: "How many blocks the file should contain. The expected size is this times the 64 KiB block size, and a file of any other size fails with sizeWrong before any block is read."
+          description: "How many blocks the file should contain. The expected size is this times the 64 KiB block size, and a file of any other size fails with sizeWrong before any block is read."
+          example: "512"
+
+        - name: "sampleBlocks"
+          in: "query"
+          required: false
+          schema:
+            type: "number"
+            format: "int32"
+            example: 0
+            description: "Verify only this many blocks instead of all of them, spread one per equal stratum so that any run of consecutive bad blocks at least twice the stratum size is still guaranteed to be caught. Omit or set to 0 to read every block, which is the cheap option when the file is local to the server."
+          description: "Verify only this many blocks instead of all of them, spread one per equal stratum so that any run of consecutive bad blocks at least twice the stratum size is still guaranteed to be caught. Omit or set to 0 to read every block, which is the cheap option when the file is local to the server."
+          example: 0
+
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyBlocksResponse"
                 type: "object"
   /{locationId}/copy:
     post:
@@ -560,7 +634,7 @@ paths:
                 destination:
                   type: "string"
                   example: "archive/results"
-                  description: "Location-relative destination folder for the extracted contents"
+                  description: "Location-relative destination folder for the extracted contents. The folder must already exist; empty extracts into the location root."
                 destLocation:
                   type: "string"
                   example: "Automation"
@@ -575,8 +649,8 @@ paths:
   /{locationId}/rename:
     post:
       operationId: "rename"
-      summary: "Rename a file within its folder"
-      description: "Renames a file or folder in place within a location. Mutates the workspace; requires file:write."
+      summary: "Rename or move a file within a location"
+      description: "Renames a file or folder within a location. Mutates the workspace; requires file:write."
       x-agent-expose: "hidden"
       x-agent-permission: "file:write"
       parameters:
@@ -603,7 +677,7 @@ paths:
                 newUri:
                   type: "string"
                   example: "reports/final.vcf.gz"
-                  description: "New name (or location-relative path) for the file"
+                  description: "New location-relative path for the file, resolved from the location root exactly as oldUri is. A bare file name therefore moves the file to the location root."
                 overwrite:
                   type: "boolean"
                   example: false
@@ -649,11 +723,65 @@ paths:
             application/json:
               schema:
                 type: "string"
+  /createTempDirectory:
+    post:
+      operationId: "createTempDirectory"
+      summary: "Create a temporary directory for short-lived files"
+      description: "Creates a directory in the server's temp location for files that are produced by one request and consumed by the next, such as an export that is written and then downloaded. The directory is deleted once it expires; callers do not need to clean it up. Mutates the workspace; requires file:write."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:write"
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                expiresInSeconds:
+                  type: "number"
+                  format: "int32"
+                  example: 3600
+                  description: "Seconds until the directory may be deleted. Defaults to one hour; capped at one day."
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TempDirectoryResponse"
+                type: "object"
+  /removeTempDirectory:
+    post:
+      operationId: "removeTempDirectory"
+      summary: "Delete a directory made by createTempDirectory"
+      description: "Deletes a temporary directory and everything in it, for a caller that is done with it before it expires. Only directories in the server's temp location can be removed this way. Mutates the workspace; requires file:write."
+      x-agent-expose: "hidden"
+      x-agent-permission: "file:write"
+      requestBody:
+        required: "true"
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required:
+                - "uri"
+              properties:
+                uri:
+                  type: "string"
+                  example: "1719187200-8f14e45fceea167a5a36dedd4bea2543"
+                  description: "The directory's location-relative path, as returned by createTempDirectory."
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "boolean"
   /{locationId}/download:
     post:
       operationId: "fileDownload"
       summary: "Request a download URL for a file"
-      description: "Returns a short-lived, tokenized URL for downloading a file's contents. Does not stream the bytes itself; GET the returned downloadUrl to fetch them."
+      description: "Returns the URL for downloading a file's contents. Does not stream the bytes itself; GET the returned downloadUrl to fetch them, authorized the same way as any other API call."
       x-agent-permission: "file:list"
       parameters:
         - name: "locationId"
@@ -675,6 +803,10 @@ paths:
                   type: "string"
                   example: "reports/variant_calls.vcf.gz"
                   description: "Location-relative path of the file to download"
+                removeWhenServed:
+                  type: "boolean"
+                  example: true
+                  description: "Whether to delete the temporary directory holding the file once its last byte has been sent, so a file produced for one download does not wait out its expiry. Defaults to true. Only applies to the server's temp location; a file anywhere else is never deleted by being downloaded."
       responses:
         200:
           description: "Success"
@@ -793,10 +925,10 @@ paths:
           required: true
           schema:
             type: "string"
-            example: 8388608
-            description: "Number of bytes already uploaded before this chunk (a string to support large files)"
-          description: "Number of bytes already uploaded before this chunk (a string to support large files)"
-          example: 8388608
+            example: "0"
+            description: "Number of bytes already uploaded before this chunk (a string to support large files). Must equal the byte count the server has already received, so the first chunk sends 0."
+          description: "Number of bytes already uploaded before this chunk (a string to support large files). Must equal the byte count the server has already received, so the first chunk sends 0."
+          example: "0"
 
         - name: "isLastChunk"
           in: "query"
@@ -907,13 +1039,13 @@ components:
           example: "reports/variant_calls.vcf.gz"
         token:
           type: "string"
-          description: "Random base32 token identifying this upload session; pass it to fileUploadChunk and cancelUpload."
-          example: "K7QF2M9XZ4TB8N6P"
+          description: "Random 16-character lowercase hex token identifying this upload session; pass it to fileUploadChunk and cancelUpload."
+          example: "3f8a2b1c9d4e5f60"
         maxChunkSize:
           type: "number"
           format: "int32"
           description: "Maximum number of bytes the server accepts per fileUploadChunk call."
-          example: 8388608
+          example: 10485760
       required:
         - "uri"
         - "token"
@@ -924,15 +1056,36 @@ components:
       properties:
         downloadUrl:
           type: "string"
-          description: "URL to GET the file's bytes (the workspace's /api/download/<locationId>/<uri> endpoint); the one-time token is included as a query parameter."
-          example: "/api/download/Documents/reports/variant_calls.vcf.gz?token=K7QF2M9XZ4TB8N6P"
+          description: "URL to GET the file's bytes (the workspace's /api/download/<locationId>/<uri> endpoint). Authorize the GET with the session cookie or an API key, as for any other call; the trailing token parameter is not currently populated or checked."
+          example: "/api/download/Documents/reports/variant_calls.vcf.gz?token=eyJhbGciOiJIUzI1NiJ9"
         expires:
           type: "number"
           format: "int32"
-          description: "Unix epoch seconds after which the download URL stops working."
+          description: "Unix epoch seconds after which the download URL is intended to expire. Not enforced while the URL carries no token."
           example: 1719187200
       required:
         - "downloadUrl"
+        - "expires"
+
+    TempDirectoryResponse:
+      type: "object"
+      properties:
+        locationId:
+          type: "string"
+          description: "Location the directory was created in; pass it back as locationId to file operations."
+          example: ".temp"
+        uri:
+          type: "string"
+          description: "Location-relative path of the new directory."
+          example: "1719187200-8f14e45fceea167a5a36dedd4bea2543"
+        expires:
+          type: "number"
+          format: "int32"
+          description: "Unix epoch seconds after which the directory is eligible for deletion."
+          example: 1719187200
+      required:
+        - "locationId"
+        - "uri"
         - "expires"
 
     UrlCheckResponse:
@@ -944,8 +1097,8 @@ components:
           example: "https://example.com/variant_calls.vcf.gz"
         size:
           type: "string"
-          description: "File size in bytes if the server reported it, otherwise null."
-          example: 139131931
+          description: "File size in bytes, or 0 when the server reported no Content-Length."
+          example: "139131931"
         mimeType:
           type: "string"
           description: "MIME type from the response Content-Type header, if available."
@@ -978,15 +1131,15 @@ components:
         size:
           type: "string"
           description: "File size in bytes as a string; null for folders."
-          example: 139131931
+          example: "139131931"
         created:
           type: "string"
           description: "Creation time in ISO 8601 UTC."
-          example: "2019-06-24T00:00:00.000Z"
+          example: "2019-06-24T00:00:00Z"
         modified:
           type: "string"
           description: "Last-modified time in ISO 8601 UTC."
-          example: "2019-06-24T00:00:00.000Z"
+          example: "2019-06-24T00:00:00Z"
       required:
         - "name"
         - "url"
@@ -994,6 +1147,72 @@ components:
         - "isSymLink"
         - "created"
         - "modified"
+
+    VerifyBlockStatus:
+      type: "string"
+      enum:
+        - "verified"
+        - "zeroFilled"
+        - "badMagic"
+        - "wrongVersion"
+        - "staleRun"
+        - "wrongBlock"
+        - "wrongFile"
+        - "crcMismatch"
+        - "shortRead"
+        - "openFailed"
+        - "sizeWrong"
+
+    VerifyBlocksResponse:
+      type: "object"
+      properties:
+        verified:
+          type: "boolean"
+          description: "True only when every block that was checked was correct."
+        status:
+          $ref: "#/components/schemas/VerifyBlockStatus"
+          type: "object"
+          description: "What was wrong, or verified when nothing was. zeroFilled means the filesystem allocated space without writing it, which is the classic signature of a write that was reported complete before the data was durable; wrongBlock means another offset's data turned up here, which points at readahead or FUSE chunking; staleRun means a cached extent from an earlier run."
+        detail:
+          type: "string"
+          description: "Human-readable explanation of the status, empty when verified."
+        blockIndex:
+          type: "string"
+          description: "Zero-based index of the first block that failed, as a string to support large files; null when verified."
+          example: "417"
+        blocksChecked:
+          type: "string"
+          description: "How many blocks were actually read and validated. Less than blockCount when sampling was requested."
+          example: "512"
+        blockCount:
+          type: "string"
+          description: "Total number of blocks the file is expected to contain."
+          example: "512"
+        guaranteedRunLength:
+          type: "string"
+          description: "The shortest run of consecutive bad blocks this check was guaranteed to catch, in blocks. 1 when every block was read. Larger when sampling: a shorter corrupt run may have been missed entirely."
+          example: "1"
+        size:
+          type: "string"
+          description: "Size of the file on the server, in bytes."
+          example: "33554432"
+        systemError:
+          type: "string"
+          description: "The server's errno text when the file could not be opened or read; null otherwise."
+        tookMs:
+          type: "number"
+          format: "int32"
+          description: "Milliseconds the server spent reading and validating."
+          example: 84
+      required:
+        - "verified"
+        - "status"
+        - "detail"
+        - "blocksChecked"
+        - "blockCount"
+        - "guaranteedRunLength"
+        - "size"
+        - "tookMs"
 
     FileResponse:
       type: "object"
