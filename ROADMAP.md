@@ -24,6 +24,8 @@ management**.
 The embedded-JS and Python scripting surfaces that customize VarSeq/VSClinical output. Keep these
 distinct — they use different APIs; don't mix them:
 - **VSClinical evaluation scripts** — drive an ACMG/AMP evaluation (`CustomScript.run`).
+  *Started:* anatomy, API pointers and the headless `vspipeline` path are in
+  [`vsclinical/evaluation-scripts.md`](./vsclinical/evaluation-scripts.md).
 - **VSClinical evaluation reports** — custom report rendering inside an evaluation.
 - **Table reports** — read project data → Word/text (e.g. PGx, STR).
 - **Report scripts** (project/report JS API) and legacy **VS Reports** (`form.*`, deprecated).
