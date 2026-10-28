@@ -98,6 +98,7 @@ The narrative playbook: [`vswarehouse/reference/agent-loop.md`](./vswarehouse/re
 | Author a task / workflow / plugin | [`vswarehouse/README.md`](./vswarehouse/README.md) → [`reference/task-workflow-authoring.md`](./vswarehouse/reference/task-workflow-authoring.md) |
 | Understand the task **execution environment** (`/scratch`, secrets, images, path traps) | [`vswarehouse/reference/environment.md`](./vswarehouse/reference/environment.md) |
 | Read/write TSF tracks & catalogs in Python | [`vswarehouse/reference/pygautil-tsf.md`](./vswarehouse/reference/pygautil-tsf.md) + `/opt/frontend/docs/tools/pygautil.md` |
+| Query an annotation source (track/TSF) through the server, incl. one you just uploaded | [`vswarehouse/reference/annotation-lookup.md`](./vswarehouse/reference/annotation-lookup.md) |
 | Copy a **worked example** definition | [`vswarehouse/examples/`](./vswarehouse/examples/) (curated) |
 | Find **everything installed on this server** to copy from | [`server-index/`](./server-index/) — built-in tasks + template tasks/workflows |
 | Practice running & fixing a task end-to-end | [`sandbox/`](./sandbox/) |

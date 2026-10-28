@@ -57,6 +57,10 @@ client's own failures use a reserved band above it:
 A run whose own code lands in 123–128 is ambiguous; read `returnCode` from
 `task-status --output=json` when the distinction matters.
 
+An expired session has been seen to print `Invalid credentials` and still exit `0`, so check
+the output as well as `$?`. Raw `curl` against `/w/<ws>/api/*` can show the same expiry as curl
+exit 52 (empty reply). Either way, ask the user to refresh the session; don't debug auth.
+
 ### Gotchas verified on this build (don't get caught by these)
 - **`-h` is help, not host.** The server url flag is `--host=URL`; you do not need it here,
   the environment already points at this workspace.

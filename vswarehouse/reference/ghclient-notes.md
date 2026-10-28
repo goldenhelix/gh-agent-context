@@ -40,6 +40,11 @@ client = GHClient()   # composes GH_SERVER_URL + GH_WORKSPACE_ID and reads GH_SE
   canceled/deleted/skipped run makes `wait()` and `log(follow=True)` poll forever: always pass
   `timeout=` to `wait()`, and treat `status(run_id)['status'] in {'completed', 'failed',
   'canceled', 'deleted', 'skipped'}` as terminal if you poll yourself.
+- **No Lookup API sub-client.** Query annotation sources with direct HTTP calls; see
+  [`annotation-lookup.md`](./annotation-lookup.md). When you build GET query strings yourself,
+  note that `requests`' `params=` and `urllib.parse.urlencode` encode a space as `+`, which the
+  server does not decode: `assembly=GRCh_38,Chromosome,Homo+sapiens` fails as a build mismatch.
+  Use `urlencode(params, quote_via=urllib.parse.quote)`.
 - Errors raise `GHClientError` with `.status_code` and `.body`:
   ```python
   from ghclient import GHClient, GHClientError

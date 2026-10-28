@@ -12,6 +12,7 @@ at `/opt/frontend/docs/` — they capture the gotchas those docs don't spell out
 | [`./gautil-client.md`](./gautil-client.md) | Driving the server from the shell — full command index + the run→poll→log loop. |
 | [`ghclient-notes.md`](./ghclient-notes.md) | Driving the server from Python — auth precedence, catalog ids, `wait()` status strings. |
 | [`pygautil-tsf.md`](./pygautil-tsf.md) | Reading/writing TSF tracks & catalogs — schema codes, `createTrack`/`convert`, multi-build. |
+| [`annotation-lookup.md`](./annotation-lookup.md) | Querying annotation sources through the server's Lookup API — refreshing after an upload, symbol-keyed results, `%20` in GET params. |
 
 Authoritative sources on the server (prefer these when they disagree with anything here — they
 are version-matched to the running build):

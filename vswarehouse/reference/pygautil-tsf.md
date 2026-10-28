@@ -105,6 +105,8 @@ pygautil.liftover("17", 7687470, 7687471, "G/C", "GRCh_37_g1k")
 # liftover only knows human GRCh37<->GRCh38 chains, under %SysData%/liftover/*.chain.gz;
 # failures include "Sequence intersects no chains" and a missing-chain-file message.
 ```
+`convertPdot` returns the changed base(s), not the codon: KRAS G12C comes back as a one-base SNV.
+A codon-level scope must expand to the full reference codon (`stop - start == 3`).
 
 ## Multi-build (GRCh38 + GRCh37 in one script)
 Finalize GRCh38 first (default coord sys), then switch before finalizing GRCh37:

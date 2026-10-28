@@ -15,6 +15,11 @@ lists the current set:
 
 Substitute your own workspace id for `<workspace>` in every per-workspace path.
 
+One endpoint the Lookup API depends on is in none of these specs:
+`POST /w/<workspace>/api/annotations/refresh` (body `{}`, returns `"REFRESH_COMPLETE"`) rescans
+the annotation folders so a newly uploaded source resolves. See
+[`../reference/annotation-lookup.md`](../reference/annotation-lookup.md).
+
 This folder also carries a static, possibly-stale snapshot of those same specs, downloaded by
 [`refresh-api-specs.py`](./refresh-api-specs.py) (this repo pins no version — treat the committed
 copies only as an offline fallback, never as the contract of record).
