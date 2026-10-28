@@ -11,6 +11,11 @@ This is the shared agent reference for **all** Golden Helix products. Today it i
 workspace management. VarSeq / VS Pipeline / VSClinical scripting are planned; see
 [`ROADMAP.md`](./ROADMAP.md).
 
+Newer servers also ship **`/opt/agent-context/AGENTS.md`** (linked as `~/AGENTS.md` and
+`~/CLAUDE.md` in workspace containers): the version-matched description of this image's tools,
+paths, environment variables and docs. When it exists, it wins over the tables below, which are a
+fallback for older servers. This repo adds the field notes, recipes and worked examples.
+
 ---
 
 ## You are on a live server — verify, don't guess

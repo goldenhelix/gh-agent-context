@@ -38,9 +38,12 @@ in-container. Any other `command:` gets its args `${VAR}`-substituted by the run
 image.
 
 ## Python & libraries in the default server image
-`python3` is the bundled CPython 3.10.15 at `/opt/python/bin` (there is no system python3).
-`pygautil` is a cpython-310 extension, so it imports only under that interpreter — don't build a
-venv or install another python and expect `import pygautil` to work.
+`python3` is the bundled CPython 3.10.15 at `/opt/python/bin`, first on `PATH`. `pygautil` is a
+cpython-310 extension, so it imports only under that interpreter — don't build a venv or install
+another python and expect `import pygautil` to work. Debian's own `/usr/bin/python3` (3.11) is
+also in the image: a login shell (`bash -lc`) on a server image without `/opt/agent-context` resets `PATH` and
+picks it up, along with losing `gautil`. Call `/opt/python/bin/python3` explicitly if you must use
+a login shell there.
 
 Pre-installed and load-bearing: `requests`, `jinja2`, and the Golden Helix libs **`pygautil`** and
 **`ghclient`** at `/opt/apiserver/` (already on `PYTHONPATH` in this image). Do not assume anything
