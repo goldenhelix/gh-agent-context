@@ -31,6 +31,9 @@ server-index/                 Searchable indexes of what's installed ON this ser
     server-templates.md         /opt/server_templates example tasks/workflows/apps
     generate-index.py           Regenerate the two indexes above.
 sandbox/                      Copies of template tasks to practice running & fixing end-to-end.
+vsclinical/                   VSClinical scripting:
+    evaluation-scripts.md       evaluation scripts (CustomScript): API, headless vspipeline runs
+    examples/                   verified task that runs an evaluation script end to end
 ```
 
 ## Design principles

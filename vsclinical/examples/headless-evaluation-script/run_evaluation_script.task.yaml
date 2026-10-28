@@ -1,0 +1,131 @@
+# Run a VSClinical evaluation script (CustomScript, script_cancer.js) headlessly with vspipeline:
+# create a project from a template that has a VSClinical view, import a sample, attach the AMP
+# workflow, then run a workflow script (driver.js) that creates an evaluation, calls
+# cancer.runCustomScript on the evaluation script, and prints the resulting biomarkers.
+#
+# Copy this folder to Automation/Workflows/VSClinical Evaluation Scripts/ to run it as is.
+# See vsclinical/evaluation-scripts.md.
+name: Run VSClinical Evaluation Script
+description: Headlessly create a VSClinical AMP evaluation and run a custom evaluation script against it with vspipeline
+
+auto_generate_session_for_account: "{workspaceBot}"
+
+agent_requirements:
+  cpu_cores: 4
+  memory_gb: 12
+
+parameters:
+  - name: script_file
+    label: Evaluation Script
+    help: The script_cancer.js of the evaluation script to run
+    type: file
+    value: /Automation/Workflows/VSClinical Evaluation Scripts/Import Exon Skipping Events/script_cancer.js
+
+  - name: selected_file
+    label: Script Input File
+    help: File passed to the script as its selected input (the file a user would pick in the GUI)
+    type: file
+    value: /Automation/Workflows/VSClinical Evaluation Scripts/Import Exon Skipping Events/met_exon14_skipping.tsv
+
+  - name: vcf_file
+    label: Sample VCF
+    help: Any VCF; it only provides the sample the evaluation is created for
+    type: file
+    value: /Automation/Workflows/VSClinical Evaluation Scripts/tumor_only_braf.vcf
+
+  - name: project_template
+    label: VarSeq Project Template
+    help: Must contain a VSClinical workflow view (see workflow_view_id)
+    type: file
+    path: /AppData/VarSeq/User Data/ProjectTemplates/
+    value: /AppData/VarSeq/User Data/ProjectTemplates/Comprehensive Cancer Template GRCh38.vsproject-template
+
+  - name: workflow_view_id
+    label: Workflow View ID
+    help: The template's VSClinical view (listed by vspipeline get_view_list)
+    type: string
+    value: Workflow5
+
+  - name: tumor_type
+    label: Tumor Type
+    type: string
+    value: Non-Small Cell Lung Cancer
+
+steps:
+  - name: vspipeline
+    description: Create project and evaluation, then run the evaluation script
+    type: cmd
+    docker:
+      image: ${VSPIPELINE_DOCKER_IMAGE}
+    args:
+      - |-
+        set -exuo pipefail
+
+        export GOLDENHELIX_USERDATA=${WORKSPACE_DIR}/AppData
+        # Parameters are substituted into this text, so copy them into shell variables before
+        # using bash expansions such as @Q on them
+        SCRIPT_FILE="${script_file}"
+        SELECTED_FILE="${selected_file}"
+        VCF_FILE="${vcf_file}"
+        PROJECT_TEMPLATE="${project_template}"
+        TUMOR_TYPE="${tumor_type}"
+        output_dir="$(pwd)"
+        work_dir="$(mktemp -d -p /scratch 2>/dev/null || mktemp -d)"
+        cd "$work_dir"
+
+        # Copy the script folder so its sibling files resolve the same as in the GUI
+        mkdir -p eval_script
+        cp "$(dirname "$SCRIPT_FILE")"/* eval_script/
+        script_path="$work_dir/eval_script/$(basename "$SCRIPT_FILE")"
+
+        # Workflow scripts get the cancer/acmg APIs as globals. A scriptName ending in .js is
+        # used as a path; otherwise it names a folder under ReportTemplates. The script's own
+        # console output goes to project/workflows/server.log, not stdout.
+        cat <<EOF > driver.js
+        const { evaluationId } = await cancer.createEvaluation({ tumorType: ${TUMOR_TYPE@Q} });
+        console.log(\`Created evaluation with ID \${evaluationId}\`);
+
+        await cancer.runCustomScript({
+            scriptName: '$script_path',
+            args: [String(evaluationId)],
+            selectedFiles: [${SELECTED_FILE@Q}],
+        });
+        console.log('Custom script finished');
+
+        const biomarkers = await cancer.getEvaluationBiomarkers({ evaluationId });
+        for (const b of biomarkers) {
+            console.log('BIOMARKER ' + JSON.stringify({
+                id: b.id,
+                mutation: b.mutation,
+                possibleMutations: b.possibleMutations.map(m => \`\${m.name} [\${m.annotationScope}]\`),
+            }));
+        }
+
+        export { };
+        EOF
+        cat driver.js
+
+        # foreach_sample defaults to affected_only=True, which skips samples with no affected status
+        cat <<EOF > run.vs-batch
+        get_version
+        project_create path="project" template="$PROJECT_TEMPLATE"
+        import files="$VCF_FILE"
+        download_required_sources
+        task_wait
+        get_view_list
+        set_current_workflow amp ${workflow_view_id} fix=True
+        foreach_sample "run_workflow_script driver.js {name}" affected_only=False
+        wait_for_scripts_to_complete
+        project_close
+        EOF
+        cat run.vs-batch
+
+        status=0
+        /opt/vspipeline/vspipeline -c batch file=run.vs-batch || status=$?
+
+        cp driver.js run.vs-batch "$output_dir"/
+        cp project/workflows/*.log "$output_dir"/ 2>/dev/null || true
+        cp project/*.log "$output_dir"/ 2>/dev/null || true
+        echo "=== Evaluation script output (project/workflows/server.log)"
+        cat project/workflows/server.log 2>/dev/null || true
+        exit $status

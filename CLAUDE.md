@@ -8,8 +8,8 @@ you need.
 
 This is the shared agent reference for **all** Golden Helix products. Today it is built out for
 **VS Warehouse** (the server you're on) — automating tasks, workflows, catalogs, files, and
-workspace management. VarSeq / VS Pipeline / VSClinical scripting are planned; see
-[`ROADMAP.md`](./ROADMAP.md).
+workspace management. VSClinical evaluation scripts have a start in [`vsclinical/`](./vsclinical/);
+the rest of VarSeq / VS Pipeline / VSClinical scripting is planned; see [`ROADMAP.md`](./ROADMAP.md).
 
 Newer servers also ship **`/opt/agent-context/AGENTS.md`** (linked as `~/AGENTS.md` and
 `~/CLAUDE.md` in workspace containers): the version-matched description of this image's tools,
@@ -107,6 +107,7 @@ The narrative playbook: [`vswarehouse/reference/agent-loop.md`](./vswarehouse/re
 | Copy a **worked example** definition | [`vswarehouse/examples/`](./vswarehouse/examples/) (curated) |
 | Find **everything installed on this server** to copy from | [`server-index/`](./server-index/) — built-in tasks + template tasks/workflows |
 | Practice running & fixing a task end-to-end | [`sandbox/`](./sandbox/) |
+| Write a **VSClinical evaluation script** or run one headlessly via `vspipeline` | [`vsclinical/evaluation-scripts.md`](./vsclinical/evaluation-scripts.md) |
 | Validate YAML before submitting | [`vswarehouse/schemas/`](./vswarehouse/schemas/) (static) or `/opt/backend/workspace-schemas/` (version-matched) |
 | Call the REST API directly | [`vswarehouse/api/`](./vswarehouse/api/) (OpenAPI specs) |
 | Read the full product docs | `/opt/frontend/docs/**/*.md` — **search the `.md`, not the `.html`** |

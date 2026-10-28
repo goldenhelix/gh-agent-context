@@ -1,0 +1,3 @@
+# MET exon 14 skipping (METex14). SpliceVariant is the classic intron 14 donor variant (NM_001127500: c.3082+1G>T).
+Gene	SkippedExons	Transcript	SpliceVariant
+MET	14		NM_000245.4:c.3028+1G>T

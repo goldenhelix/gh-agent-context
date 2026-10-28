@@ -1,0 +1,5 @@
+##fileformat=VCFv4.2
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##contig=<ID=chr7>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	TUMOR01
+chr7	140753336	.	A	T	.	PASS	.	GT	0/1
